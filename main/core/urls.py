@@ -16,8 +16,34 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+from rest_framework.authtoken.views import obtain_auth_token
+
+from accounts.views import UserViewSet
+from hotspots.views import HotspotLocationViewSet, HotspotViewSet, SessionViewSet
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
+
+router = DefaultRouter()
+router.register(r'users', UserViewSet) # For accounts
+# For hotspots
+router.register('locations', HotspotLocationViewSet)
+router.register('hotspots', HotspotViewSet)
+router.register('sessions', SessionViewSet)
+
+schema_view = get_schema_view(
+    openapi.Info(
+        title="WiFi Reselling API",
+        default_version='v1',
+    ),
+    public=True,
+)
 
 urlpatterns = [
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0)),
     path('', include('accounts.urls')),
     path('admin/', admin.site.urls),
+    path('api/', include(router.urls)),
+    path('api-auth/', include('rest_framework.urls')),
+    path('api-token-auth/', obtain_auth_token),  # For token authentication
 ]

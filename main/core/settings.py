@@ -26,7 +26,13 @@ SECRET_KEY = 'django-insecure-rph)%umdfbti^gly%6j5@0yi14(smdjdu337#pwo@!@vtdijp8
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "true") == "true"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1'
+]
+CORS_ALLOWED_ORIGINS = [
+    # "https://yourfrontend.com",
+]
 
 
 # Application definition
@@ -38,6 +44,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'rest_framework.authtoken',  # For token authentication
     'accounts',
     'analytics',
     'billing',
@@ -46,14 +54,15 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.CustomExceptionMiddleware', # Error Handling middleware
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -72,6 +81,22 @@ TEMPLATES = [
         },
     },
 ]
+
+# settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_RENDERER_CLASSES': [
+        'core.renderers.CustomJSONRenderer', # Response Renderers
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    # 'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler' # Custom exception handler
+}
 
 WSGI_APPLICATION = 'core.wsgi.application'
 

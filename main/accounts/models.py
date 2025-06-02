@@ -4,6 +4,18 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from .enums import UserType
 
+@property
+def is_admin(self):
+    return self.is_authenticated and (self.is_superuser or self.user_type == 1)
+
+@property
+def is_reseller(self):
+    return self.is_authenticated and self.user_type == 2
+
+@property
+def is_customer(self):
+    return self.is_authenticated and self.user_type == 3
+
 class User(AbstractUser):
     user_type = models.PositiveSmallIntegerField(
         choices=UserType.choices,
