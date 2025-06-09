@@ -1,8 +1,8 @@
 # accounts/permissions.py
 
 from rest_framework import permissions
-
 from accounts.enums import UserType
+from rest_framework.exceptions import PermissionDenied
 
 class IsAdminOrSelf(permissions.BasePermission):
     """
@@ -35,3 +35,14 @@ class IsAdminOrSelf(permissions.BasePermission):
 
         # Allow access if the user is the owner
         return getattr(obj, "owner", None) == request.user
+
+    def has_access_to_user(request_user, target_user):
+        if request_user.is_superuser:
+            return True
+        if request_user.user_type == 1 and target_user.user_type in [2, 3]:  # Admin
+            return True
+        if request_user.user_type == 2 and target_user.parent_reseller_id == request_user.id:  # Reseller
+            return True
+        if request_user.pk == target_user.pk:
+            return True
+        raise PermissionDenied("You do not have permission to access this resource.")
