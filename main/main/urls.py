@@ -21,15 +21,22 @@ from rest_framework.authtoken.views import obtain_auth_token
 
 from accounts.views import UserViewSet
 from hotspots.views import HotspotLocationViewSet, HotspotViewSet, SessionViewSet
+from analytics.views import DailyUsageViewSet, RevenueRecordViewSet
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 router = DefaultRouter()
-router.register(r'users', UserViewSet) # For accounts
+# For accounts
+router.register(r'users', UserViewSet) 
+
 # For hotspots
 router.register('locations', HotspotLocationViewSet)
 router.register('hotspots', HotspotViewSet)
 router.register('sessions', SessionViewSet)
+
+# For analytics
+router.register('analytics/daily-usage', DailyUsageViewSet, basename='dailyusage'),
+router.register('analytics/revenue-record', RevenueRecordViewSet, basename='revenuerecord')
 
 schema_view = get_schema_view(
     openapi.Info(
