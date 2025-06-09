@@ -1,4 +1,4 @@
-# settings.py
+# accounts/settings.py
 ADMIN_SITE_HEADER = "WiFi Reselling Admin"
 ADMIN_SITE_TITLE = "WiFi Reselling Portal"
 ADMIN_INDEX_TITLE = "Welcome to WiFi Reselling Portal"

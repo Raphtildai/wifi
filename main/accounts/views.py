@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from .models import User
 from .serializers import UserSerializer
 from .permissions import IsAdminOrSelf
+from rest_framework.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -15,6 +17,23 @@ class UserViewSet(viewsets.ModelViewSet):
         print(f"Auth headers: {request.META.get('HTTP_AUTHORIZATION')}")
         # print(f"User before auth: {request.user}")
         return request
+    
+    # Override get_object() for secure access checks
+    def get_object(self):
+        obj = get_object_or_404(User, pk=self.kwargs['pk'])
+
+        # Role-based access control
+        user = self.request.user
+        if user.is_superuser:
+            return obj
+        elif user.user_type == 1 and obj.user_type in [2, 3]:  # Admin sees resellers/customers
+            return obj
+        elif user.user_type == 2 and obj.parent_reseller_id == user.id:  # Reseller sees own customers
+            return obj
+        elif user.pk == obj.pk:  # Self-access
+            return obj
+
+        raise PermissionDenied("You do not have permission to access this user.")
     
     def get_queryset(self):
         user = self.request.user

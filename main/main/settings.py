@@ -46,10 +46,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework.authtoken',  # For token authentication
+    'django_filters', # For filtering results
+    'main',
     'accounts',
     'analytics',
     'billing',
-    'core',
     'hotspots'
 ]
 
@@ -62,10 +63,10 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware.CustomExceptionMiddleware', # Error Handling middleware
+    'main.middleware.CustomExceptionMiddleware', # Error Handling middleware
 ]
 
-ROOT_URLCONF = 'core.urls'
+ROOT_URLCONF = 'main.urls'
 
 TEMPLATES = [
     {
@@ -85,7 +86,7 @@ TEMPLATES = [
 # settings.py
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
-        'core.renderers.CustomJSONRenderer', # Response Renderers
+        'main.renderers.CustomJSONRenderer', # Response Renderers
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -95,10 +96,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    # 'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler' # Custom exception handler
+    # 'EXCEPTION_HANDLER': 'main.exceptions.custom_exception_handler' # Custom exception handler
 }
 
-WSGI_APPLICATION = 'core.wsgi.application'
+WSGI_APPLICATION = 'main.wsgi.application'
 
 
 # Database

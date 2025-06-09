@@ -1,5 +1,7 @@
 from rest_framework import viewsets, permissions
 from .models import HotspotLocation, Hotspot, Session
+from django_filters.rest_framework import DjangoFilterBackend
+
 from .serializers import (
     HotspotLocationSerializer,
     HotspotSerializer,
@@ -17,6 +19,8 @@ class HotspotViewSet(viewsets.ModelViewSet):
     queryset = Hotspot.objects.all()
     serializer_class = HotspotSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminOrSelf]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['hotspot_type']
 
     def get_queryset(self):
         user = self.request.user
@@ -34,6 +38,8 @@ class SessionViewSet(viewsets.ModelViewSet):
     queryset = Session.objects.all()
     serializer_class = SessionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['is_active']
 
     def get_queryset(self):
         user = self.request.user
