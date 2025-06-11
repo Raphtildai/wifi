@@ -5,8 +5,11 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 
+from helpers.functions import filter_objects_by_user_access
+
 from .models import DailyUsage, RevenueRecord
 from .serializers import DailyUsageSerializer, RevenueRecordSerializer
+from django.contrib.auth import get_user_model
 from accounts.permissions import has_access_to_user
 
 
@@ -15,20 +18,13 @@ class DailyUsageViewSet(viewsets.ModelViewSet):
     serializer_class = DailyUsageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        user = self.request.user
-        return DailyUsage.objects.filter(user__in=[
-            u for u in DailyUsage.objects.values_list("user", flat=True).distinct()
-            if has_access_to_user(user, u)
-        ])
+    def get_queryset(self):        
+        return filter_objects_by_user_access(DailyUsage, "user", self.request.user)
 
     def get_object(self):
         obj = get_object_or_404(DailyUsage, pk=self.kwargs['pk'])
         if not has_access_to_user(self.request.user, obj.user):
-            return Response(
-                {"message": "You do not have permission to access this usage record."},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            raise PermissionDenied("You do not have permission to access this usage record.")
         return obj
 
     def list(self, request, *args, **kwargs):
@@ -45,19 +41,12 @@ class RevenueRecordViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        return RevenueRecord.objects.filter(reseller__in=[
-            u for u in RevenueRecord.objects.values_list("reseller", flat=True).distinct()
-            if has_access_to_user(user, u)
-        ])
+        return filter_objects_by_user_access(RevenueRecord, 'reseller', self.request.user)
 
     def get_object(self):
         obj = get_object_or_404(RevenueRecord, pk=self.kwargs['pk'])
         if not has_access_to_user(self.request.user, obj.reseller):
-            return Response(
-                {"message": "You do not have permission to access this revenue record."},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            raise PermissionDenied("You do not have permission to access this revenue record.")
         return obj
 
     def list(self, request, *args, **kwargs):

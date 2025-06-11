@@ -35,8 +35,8 @@ router.register('hotspots', HotspotViewSet)
 router.register('sessions', SessionViewSet)
 
 # For analytics
-router.register('analytics/daily-usage', DailyUsageViewSet, basename='dailyusage'),
-router.register('analytics/revenue-record', RevenueRecordViewSet, basename='revenuerecord')
+router.register('analytics/daily-usage', DailyUsageViewSet, basename='daily-usage'),
+router.register('analytics/revenue-record', RevenueRecordViewSet, basename='revenue-record')
 
 schema_view = get_schema_view(
     openapi.Info(
