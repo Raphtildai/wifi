@@ -10,6 +10,7 @@ from accounts.permissions import has_access_to_user
 from helpers.functions import check_user_access, filter_objects_by_user_access
 from .models import DailyUsage, RevenueRecord
 from .serializers import DailyUsageSerializer, RevenueRecordSerializer
+from main.exceptions import safe_destroy
 
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -108,10 +109,7 @@ class DailyUsageViewSet(viewsets.ModelViewSet):
         user = request.user
         if not (user.is_superuser or obj.user == user):
             raise PermissionDenied("You do not have permission to delete this daily usage record.")
-        self.perform_destroy(obj)
-        return Response({
-            "message": "Daily usage record deleted successfully"
-        }, status=status.HTTP_204_NO_CONTENT)
+        return safe_destroy(obj, self.perform_destroy)
 
 
 class RevenueRecordViewSet(viewsets.ModelViewSet):
@@ -194,7 +192,4 @@ class RevenueRecordViewSet(viewsets.ModelViewSet):
         if not user.is_superuser:
             raise PermissionDenied("You do not have permission to delete this revenue record.")
 
-        self.perform_destroy(obj)
-        return Response({
-            "message": "Revenue record deleted successfully"
-        }, status=status.HTTP_204_NO_CONTENT)
+        return safe_destroy(obj, self.perform_destroy)

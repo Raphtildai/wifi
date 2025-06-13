@@ -9,6 +9,7 @@ from .serializers import HotspotLocationSerializer, HotspotSerializer, SessionSe
 from accounts.permissions import IsAdminOrReadOnly, IsAdminOrSelf
 from accounts.permissions import has_access_to_user
 from helpers.functions import filter_objects_by_user_access
+from main.exceptions import safe_destroy
 
 
 class HotspotLocationViewSet(viewsets.ModelViewSet):
@@ -60,9 +61,7 @@ class HotspotLocationViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        self.perform_destroy(instance)
-        return Response({"message": "Hotspot location deleted successfully", "data": None}, status=status.HTTP_204_NO_CONTENT)
-
+        return safe_destroy(instance, self.perform_destroy)
 
 class HotspotViewSet(viewsets.ModelViewSet):
     serializer_class = HotspotSerializer
@@ -125,9 +124,7 @@ class HotspotViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        self.perform_destroy(instance)
-        return Response({"message": "Hotspot deleted successfully", "data": None}, status=status.HTTP_204_NO_CONTENT)
-
+        return safe_destroy(instance, self.perform_destroy)
 
 class SessionViewSet(viewsets.ModelViewSet):
     serializer_class = SessionSerializer
@@ -136,10 +133,6 @@ class SessionViewSet(viewsets.ModelViewSet):
     filterset_fields = ['is_active']
 
     def get_queryset(self):
-        # user = self.request.user
-        # if user.is_superuser or user.user_type in [1, 2]:  # Admin or Reseller
-        #     return Session.objects.all()
-        # elif user
         return filter_objects_by_user_access(
             model_class=Session,
             user_field="user",
@@ -180,7 +173,8 @@ class SessionViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         if not (request.user.is_superuser or request.user.user_type == 1):
             raise PermissionDenied("Only admins can delete sessions.")
-        return super().destroy(request, *args, **kwargs)
+        instance = self.get_object()
+        return safe_destroy(instance, self.perform_destroy)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

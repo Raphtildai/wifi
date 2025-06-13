@@ -6,6 +6,7 @@ from billing.models import Plan, Subscription, Transaction
 from billing.serializers import PlanSerializer, SubscriptionSerializer, TransactionSerializer
 # from accounts.permissions import has_access_to_user
 from helpers.functions import filter_objects_by_user_access
+from main.exceptions import safe_destroy
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -34,7 +35,8 @@ class PlanViewSet(ModelViewSet):
         user = self.request.user
         if not user.is_superuser and user.user_type != UserType.ADMIN:
             raise PermissionDenied("Only admins can delete plans.")
-        return super().destroy(request, *args, **kwargs)
+        instance = self.get_object()
+        return safe_destroy(instance, self.perform_destroy)
 
 class SubscriptionViewSet(ModelViewSet):
     serializer_class = SubscriptionSerializer
@@ -72,7 +74,7 @@ class SubscriptionViewSet(ModelViewSet):
         instance = self.get_object()
         if not has_access_to_user(request.user, instance.user):
             raise PermissionDenied("You do not have access to delete this subscription.")
-        return super().destroy(request, *args, **kwargs)
+        return safe_destroy(instance, self.perform_destroy)
 
 class TransactionViewSet(ModelViewSet):
     serializer_class = TransactionSerializer
@@ -100,4 +102,4 @@ class TransactionViewSet(ModelViewSet):
         instance = self.get_object()
         if not has_access_to_user(request.user, instance.user):
             raise PermissionDenied("You do not have access to delete this Transaction.")
-        return super().destroy(request, *args, **kwargs)
+        return safe_destroy(instance, self.perform_destroy)
