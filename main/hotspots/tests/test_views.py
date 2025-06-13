@@ -1,118 +1,160 @@
-# hotspots/tests/test_views.py
+# hotspots/test_views.py
 
+import pytest
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
-from rest_framework.authtoken.models import Token
 from hotspots.models import HotspotLocation, Hotspot, Session
 
-User = get_user_model()
 
+@pytest.mark.django_db
+class TestHotspotViews:
 
-class HotspotExtendedTests(APITestCase):
-    print("======== Running HotSpots Views Tests ========")
-    def setUp(self):
-        self.admin = User.objects.create_user(username='admin', password='pass', user_type=1)
-        self.reseller = User.objects.create_user(username='reseller', password='pass', user_type=2)
-        self.customer = User.objects.create_user(username='customer', password='pass', user_type=3)
+    # --------------------- LOCATION TESTS ---------------------
 
-        self.admin_token = Token.objects.create(user=self.admin)
-        self.reseller_token = Token.objects.create(user=self.reseller)
-        self.customer_token = Token.objects.create(user=self.customer)
+    def test_create_hotspot_location_as_admin(self, admin_user, api_client):
+        api_client.force_authenticate(user=admin_user)
+        data = {"name": "Admin Location", "address": "Main St", "latitude": 1.2, "longitude": 2.2}
+        response = api_client.post('/api/locations/', data)
+        assert response.status_code == status.HTTP_201_CREATED
 
-        self.location = HotspotLocation.objects.create(
-            name="Base Location", address="123 Admin St", latitude=1.0, longitude=36.0
-        )
-        self.hotspot = Hotspot.objects.create(
-            ssid="AdminNet", password="adminpass", location=self.location,
-            hotspot_type="PUB", max_users=25, bandwidth_limit=100, owner=self.admin
-        )
-        self.session = Session.objects.create(
-            user=self.admin, hotspot=self.hotspot,
-            ip_address="192.168.1.10", mac_address="AA:BB:CC:DD:EE:FF"
-        )
+    def test_create_hotspot_location_as_non_admin_denied(self, reseller_user, customer_user, api_client):
+        for user in [reseller_user, customer_user]:
+            api_client.force_authenticate(user=user)
+            response = api_client.post('/api/locations/', {"name": "Invalid", "address": "N/A"})
+            assert response.status_code == status.HTTP_403_FORBIDDEN
 
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.admin_token.key)
+    def test_delete_location_as_admin(self, admin_user, api_client, location):
+        api_client.force_authenticate(user=admin_user)
+        Hotspot.objects.filter(location=location).delete()
+        response = api_client.delete(f'/api/locations/{location.id}/')
+        assert response.status_code == status.HTTP_204_NO_CONTENT
 
-    # --------------------
-    # Update Tests
-    # --------------------
-    def test_update_hotspot_location(self):
-        url = reverse('hotspotlocation-detail', args=[self.location.id])
-        data = {"name": "Updated Name", "address": "New Address", "latitude": 0.5, "longitude": 36.5}
-        response = self.client.put(url, data)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["name"], "Updated Name")
+    def test_delete_location_as_non_admin_denied(self, reseller_user, customer_user, api_client, location):
+        for user in [reseller_user, customer_user]:
+            api_client.force_authenticate(user=user)
+            response = api_client.delete(f'/api/locations/{location.id}/')
+            assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_update_hotspot(self):
-        url = reverse('hotspot-detail', args=[self.hotspot.id])
+    # --------------------- HOTSPOT TESTS ---------------------
+
+    def test_create_hotspot_as_reseller(self, reseller_user, api_client, location):
+        api_client.force_authenticate(user=reseller_user)
         data = {
-            "ssid": "UpdatedSSID",
-            "password": "newpass",
-            "location": self.location.id,
-            "hotspot_type": "COM",
-            "max_users": 30,
-            "bandwidth_limit": 75,
-            "owner": self.admin.id  
+            "ssid": "ResellerNet", "password": "pass", "location": location.id,
+            "hotspot_type": "COM", "max_users": 10, "bandwidth_limit": 50
         }
-        response = self.client.put(url, data)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["ssid"], "UpdatedSSID")
+        response = api_client.post('/api/hotspots/', data)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_update_session_end_time(self):
-        url = reverse('session-detail', args=[self.session.id])
+    def test_create_hotspot_as_customer_denied(self, customer_user, api_client, location):
+        api_client.force_authenticate(user=customer_user)
         data = {
-            "hotspot": self.hotspot.id,
-            "ip_address": "192.168.1.10",
-            "mac_address": "AA:BB:CC:DD:EE:FF",
-            "is_active": False,
-            "end_time": "2025-06-02T20:00:00Z"
+            "ssid": "InvalidNet", "password": "bad", "location": location.id,
+            "hotspot_type": "COM", "max_users": 5, "bandwidth_limit": 10
         }
-        response = self.client.put(url, data)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(response.data["is_active"])
+        response = api_client.post('/api/hotspots/', data)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    # --------------------
-    # Delete Tests
-    # --------------------
-    def test_delete_hotspot_location(self):
-        # First delete all hotspots related to the location
-        Hotspot.objects.filter(location=self.location).delete()
+    def test_update_hotspot_as_admin(self, admin_user, api_client, reseller_hotspot):
+        api_client.force_authenticate(user=admin_user)
+        url = f'/api/hotspots/{reseller_hotspot.id}/'
+        response = api_client.put(url, {
+            "ssid": "AdminUpdated", "password": "adminpass", "location": reseller_hotspot.location.id,
+            "hotspot_type": "PRI", "max_users": 20, "bandwidth_limit": 100, "owner": reseller_hotspot.owner.id
+        })
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_update_hotspot_invalid_data(self, admin_user, api_client, reseller_hotspot):
+        api_client.force_authenticate(user=admin_user)
+        url = f'/api/hotspots/{reseller_hotspot.id}/'
+        response = api_client.put(url, {"ssid": ""})  # Missing fields
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_delete_hotspot_as_admin(self, admin_user, api_client, reseller_hotspot):
+        api_client.force_authenticate(user=admin_user)
+        url = f'/api/hotspots/{reseller_hotspot.id}/'
+        response = api_client.delete(url)
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    def test_delete_hotspot_as_non_owner_denied(self, customer_user, api_client, admin_hotspot):
+        api_client.force_authenticate(user=customer_user)
+        url = f'/api/hotspots/{admin_hotspot.id}/'
+        response = api_client.delete(url)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    # --------------------- SESSION TESTS ---------------------
+
+    def test_create_session_as_customer(self, customer_user, api_client, admin_hotspot):
+        api_client.force_authenticate(user=customer_user)
+        data = {
+            "hotspot": admin_hotspot.id,
+            "ip_address": "192.168.1.99",
+            "mac_address": "FF:EE:DD:CC:BB:AA"
+        }
+        response = api_client.post('/api/sessions/', data)
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['data']['user'] == customer_user.id
+
+    def test_create_session_invalid_data(self, customer_user, api_client):
+        api_client.force_authenticate(user=customer_user)
+        response = api_client.post('/api/sessions/', {"ip_address": "1.1.1.1"})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+    def test_update_session_as_admin(self, admin_user, api_client, customer_session):
+        api_client.force_authenticate(user=admin_user)
+        url = f'/api/sessions/{customer_session.id}/'
+        response = api_client.put(url, {
+            "hotspot": customer_session.hotspot.id,
+            "ip_address": "1.1.1.1",
+            "mac_address": customer_session.mac_address,
+            "is_active": False
+        })
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_delete_session_as_admin(self, admin_user, api_client, reseller_session):
+        api_client.force_authenticate(user=admin_user)
+        url = f'/api/sessions/{reseller_session.id}/'
+        response = api_client.delete(url)
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    def test_get_session_detail_as_owner(self, customer_user, api_client, customer_session):
+        api_client.force_authenticate(user=customer_user)
+        url = f'/api/sessions/{customer_session.id}/'
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_get_session_detail_as_owner_allowed(self, api_client, customer_user, customer_session):
+        api_client.force_authenticate(user=customer_user)
+        url = f'/api/sessions/{customer_session.id}/'
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+    
+    def test_get_session_detail_as_reseller_allowed(self, reseller_user, api_client, customer_session):
+        api_client.force_authenticate(user=reseller_user)
+        url = f'/api/sessions/{customer_session.id}/'
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
         
-        url = reverse('hotspotlocation-detail', args=[self.location.id])
-        response = self.client.delete(url)
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+    def test_get_session_detail_as_non_owner_denied(self, django_user_model, api_client, customer_session):
+        random_user = django_user_model.objects.create_user(username='random', password='pass1234')
+        api_client.force_authenticate(user=random_user)
+        url = f'/api/sessions/{customer_session.id}/'
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_delete_hotspot(self):
-        url = reverse('hotspot-detail', args=[self.hotspot.id])
-        response = self.client.delete(url)
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(Hotspot.objects.filter(id=self.hotspot.id).exists())
-
-    def test_delete_session(self):
-        url = reverse('session-detail', args=[self.session.id])
-        response = self.client.delete(url)
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(Session.objects.filter(id=self.session.id).exists())
-
-    # --------------------
-    # Filter Tests
-    # --------------------
-    def test_filter_hotspots_by_type(self):
-        Hotspot.objects.create(
-            ssid="PrivateNet", password="1234", location=self.location,
-            hotspot_type="PRI", max_users=5, bandwidth_limit=10, owner=self.admin
-        )
-        response = self.client.get(reverse('hotspot-list') + "?hotspot_type=PRI")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(all(h["hotspot_type"] == "PRI" for h in response.data))
-
-    def test_filter_sessions_by_active(self):
+    def test_filter_sessions_by_active(self, admin_user, api_client, admin_hotspot):
+        api_client.force_authenticate(user=admin_user)
         Session.objects.create(
-            user=self.admin, hotspot=self.hotspot,
-            ip_address="192.168.1.20", mac_address="00:11:22:33:44:55", is_active=False
+            user=admin_user, hotspot=admin_hotspot,
+            ip_address="192.168.1.50", mac_address="22:33:44:55:66:77", is_active=False
         )
-        response = self.client.get(reverse('session-list') + "?is_active=False")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(all(not s["is_active"] for s in response.data))
+        url = '/api/sessions/?is_active=False'
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        assert all(not s['is_active'] for s in response.data['data'])
+
+    def test_non_admin_cannot_access_location_list(self, reseller_user, api_client):
+        api_client.force_authenticate(user=reseller_user)
+        response = api_client.get('/api/locations/')
+        assert response.status_code == status.HTTP_200_OK

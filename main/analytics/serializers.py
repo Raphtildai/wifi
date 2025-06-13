@@ -8,6 +8,14 @@ class DailyUsageSerializer(serializers.ModelSerializer):
 
 
 class RevenueRecordSerializer(serializers.ModelSerializer):
+    total_sales = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Convert total_sales string to float for consistency
+        if 'total_sales' in ret:
+            ret['total_sales'] = float(ret['total_sales'])
+        return ret
     class Meta:
         model = RevenueRecord
         fields = ['id', 'reseller', 'date', 'total_sales', 'commissions_earned', 'new_customers']

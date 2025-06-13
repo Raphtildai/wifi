@@ -17,33 +17,61 @@ def has_access_to_user(request_user, target_user):
 
 class IsAdminOrSelf(permissions.BasePermission):
     """
-    Custom permission to allow superusers, admins, or object owners to perform unsafe actions.
+    Allow superusers/admins full access.
+    Allow users to access their own object.
+    Restrict creation and deletion to admins/superusers only.
     """
 
     def has_permission(self, request, view):
-        # Allow any authenticated user for safe methods
+        # Allow safe methods to authenticated users
         if request.method in permissions.SAFE_METHODS:
             return request.user and request.user.is_authenticated
 
-        # Allow authenticated users for write methods — detailed check in has_object_permission
+        # For POST (create) and DELETE (list or detail delete), restrict to admins/superusers
+        if request.method in ['POST', 'DELETE']:
+            return bool(
+                request.user and 
+                request.user.is_authenticated and 
+                (request.user.is_superuser or request.user.user_type == UserType.ADMIN)
+            )
+
+        # For other unsafe methods (PATCH, PUT), allow authenticated and check object permission later
         return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
+        # Safe methods allowed
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        # Superuser or admin
-        if request.user.is_superuser or getattr(request.user, "user_type", None) == UserType.ADMIN:
+        # Admins and superusers can do anything
+        if request.user.is_superuser or request.user.user_type == UserType.ADMIN:
             return True
 
-        # Reseller editing customer-related object (assuming object has .user or .reseller)
+        # Resellers can modify users they have access to
         target_user = getattr(obj, "user", None) or getattr(obj, "reseller", None)
         if target_user and has_access_to_user(request.user, target_user):
             return True
 
-        # Fallback to exact ownership, if applicable
+        # Exact ownership fallback
         for field in ["owner", "user", "reseller"]:
             if getattr(obj, field, None) == request.user:
                 return True
 
         return False
+    
+class IsAdminOrReadOnly(permissions.BasePermission):
+    """
+    Allows full access only to superusers and admins.
+    Read-only for others.
+    """
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return request.user and request.user.is_authenticated
+        return (
+            request.user and request.user.is_authenticated and
+            (request.user.is_superuser or request.user.user_type == UserType.ADMIN)
+        )
+
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view)

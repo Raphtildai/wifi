@@ -3,6 +3,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from accounts.models import User, UserProfile
 from accounts.enums import UserType
+from tests.conftest_base import api_client, admin_user, reseller_user, customer_user
 
 
 @pytest.mark.django_db

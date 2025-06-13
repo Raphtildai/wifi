@@ -20,8 +20,9 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 
 from accounts.views import UserViewSet
-from hotspots.views import HotspotLocationViewSet, HotspotViewSet, SessionViewSet
 from analytics.views import DailyUsageViewSet, RevenueRecordViewSet
+from hotspots.views import HotspotLocationViewSet, HotspotViewSet, SessionViewSet
+from billing.views import PlanViewSet, SubscriptionViewSet, TransactionViewSet
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
@@ -30,13 +31,18 @@ router = DefaultRouter()
 router.register(r'users', UserViewSet) 
 
 # For hotspots
-router.register('locations', HotspotLocationViewSet)
-router.register('hotspots', HotspotViewSet)
-router.register('sessions', SessionViewSet)
+router.register('locations', HotspotLocationViewSet, basename='locations')
+router.register('hotspots', HotspotViewSet, basename='hotspots')
+router.register('sessions', SessionViewSet, basename='sessions')
 
 # For analytics
 router.register('analytics/daily-usage', DailyUsageViewSet, basename='daily-usage'),
 router.register('analytics/revenue-record', RevenueRecordViewSet, basename='revenue-record')
+
+# For billing
+router.register('billing/plans', PlanViewSet, basename='plans')
+router.register('billing/subscriptions', SubscriptionViewSet, basename='subscriptions')
+router.register('billing/transactions', TransactionViewSet, basename='transactions')
 
 schema_view = get_schema_view(
     openapi.Info(
