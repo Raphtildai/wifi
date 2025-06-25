@@ -1,0 +1,437 @@
+{
+    "info": {
+        "name": "WiFi",
+        "_postman_id": "Wifi-collection-001",
+        "description": "Endpoints for WiFi API containing Plan, Subscription, and Transaction",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "WiFi",
+            "item": [
+                {
+                    "name": "Hotspots",
+                    "item": [
+                        {
+                            "name": "List Hotspot Location",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/locations/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "locations"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Hotspot Location",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"name\": \"Location A\",\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/locations/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "locations"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Retrieve Hotspot Location",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/locations/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "locations",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update Hotspot Location",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"name\": \"Location A\",\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/locations/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "locations",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Delete Hotspot Location",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/locations/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "locations",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "List Hotspot",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/hotspots/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "hotspots"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Hotspot",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"name\": \"Cafe WiFi\",\n  \"location\": 1,\n  \"owner\": 3\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/hotspots/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "hotspots"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Retrieve Hotspot",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/hotspots/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "hotspots",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update Hotspot",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"name\": \"Cafe WiFi\",\n  \"location\": 1,\n  \"owner\": 3\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/hotspots/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "hotspots",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Delete Hotspot",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/hotspots/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "hotspots",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "List Session",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/sessions/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "sessions"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Session",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"hotspot\": 1,\n  \"user\": 3,\n  \"start_time\": \"2024-01-01T00:00:00Z\"\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/sessions/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "sessions"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Retrieve Session",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/sessions/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "sessions",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update Session",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"hotspot\": 1,\n  \"user\": 3,\n  \"start_time\": \"2024-01-01T00:00:00Z\"\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/sessions/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "sessions",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Delete Session",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/sessions/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "sessions",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

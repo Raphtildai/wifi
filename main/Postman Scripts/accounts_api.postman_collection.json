@@ -1,0 +1,191 @@
+{
+    "info": {
+        "name": "WiFi",
+        "_postman_id": "Wifi-collection-001",
+        "description": "Endpoints for WiFi API containing Plan, Subscription, and Transaction",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "WiFi",
+            "item": [
+                {
+                    "name": "Authentication",
+                    "item": [
+                        {
+                            "name": "Obtain Auth Token",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"username\": \"user1\",\n  \"password\": \"testpass123\"\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api-token-auth/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api-token-auth"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Accounts",
+                    "item": [
+                        {
+                            "name": "List User",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/users/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "users"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create User",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"username\": \"user1\",\n  \"email\": \"user1@example.com\",\n  \"password\": \"testpass123\",\n  \"user_type\": 2\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/users/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "users"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Retrieve User",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/users/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update User",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"username\": \"user1\",\n  \"email\": \"user1@example.com\",\n  \"password\": \"testpass123\",\n  \"user_type\": 2\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/users/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Delete User",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/users/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

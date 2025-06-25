@@ -1,0 +1,308 @@
+{
+    "info": {
+        "name": "WiFi",
+        "_postman_id": "Wifi-collection-001",
+        "description": "Endpoints for WiFi API containing Plan, Subscription, and Transaction",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "WiFi",
+            "item": [
+                {
+                    "name": "Analytics",
+                    "item": [
+                        {
+                            "name": "List Daily Usage",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/daily-usage/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "daily-usage"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Daily Usage",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"user\": 1,\n  \"hotspot\": 1,\n  \"data_used_mb\": 100\n, \"date\": 2025-06-12\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/daily-usage/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "daily-usage"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Retrieve Daily Usage",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/daily-usage/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "daily-usage",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update Daily Usage",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"user\": 3,\n  \"hotspot\": 1,\n  \"data_used_mb\": 100\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/daily-usage/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "daily-usage",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Delete Daily Usage",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/daily-usage/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "daily-usage",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "List Revenue Record",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/revenue-record/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "revenue-record"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Revenue Record",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"reseller\": 3,\n  \"amount\": 50.0\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/revenue-record/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "revenue-record"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Retrieve Revenue Record",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/revenue-record/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "revenue-record",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update Revenue Record",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"reseller\": 3,\n  \"amount\": 50.0\n}"
+                                },
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/revenue-record/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "revenue-record",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Delete Revenue Record",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Token {{auth_token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "protocol": "http",
+                                    "raw": "{{base_url}}/api/analytics/revenue-record/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "port": "{{port}}",
+                                    "path": [
+                                        "api",
+                                        "analytics",
+                                        "revenue-record",
+                                        "1"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

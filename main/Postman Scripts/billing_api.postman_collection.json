@@ -1,0 +1,477 @@
+{
+    "info": {
+        "name": "WiFi",
+        "_postman_id": "Wifi-collection-001",
+        "description": "Endpoints for WiFi API containing Plan, Subscription, and Transaction",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "WiFi",
+            "item": [
+                {
+                    "name": "Billing",
+                    "description": "Endpoints for Plan, Subscription, and Transaction",
+                    "item": [
+                        {
+                            "name": "Plans",
+                            "description": "Endpoints for Plans",
+                            "item": [
+                                {
+                                    "name": "List Plans",
+                                    "request": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "plans"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Create Plan",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"name\": \"Basic Plan\",\n  \"description\": \"Includes basic features\",\n  \"price\": \"9.99\",\n  \"duration_days\": 30,\n  \"data_limit\": 5000,\n  \"is_active\": true\n}"
+                                        },
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "plans"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Retrieve Plan",
+                                    "request": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "plans",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Update Plan",
+                                    "request": {
+                                        "method": "PUT",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"name\": \"Updated Plan\",\n  \"description\": \"Updated details\",\n  \"price\": \"19.99\",\n  \"duration_days\": 60,\n  \"data_limit\": 10000,\n  \"is_active\": true\n}"
+                                        },
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "plans",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Delete Plan",
+                                    "request": {
+                                        "method": "DELETE",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "plans",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Subscriptions",
+                            "description": "Endpoints for Subscriptions",
+                            "item": [
+                                {
+                                    "name": "List Subscriptions",
+                                    "request": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "subscriptions"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Create Subscription",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"user\": 2,\n  \"plan\": 1,\n  \"end_date\": \"2025-12-31T23:59:59Z\",\n  \"auto_renew\": true\n}"
+                                        },
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "subscriptions"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Retrieve Subscription",
+                                    "request": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "subscriptions",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Update Subscription",
+                                    "request": {
+                                        "method": "PUT",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"plan\": 1,\n  \"end_date\": \"2026-01-01T00:00:00Z\",\n  \"is_active\": true,\n  \"auto_renew\": false\n}"
+                                        },
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "subscriptions",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Delete Subscription",
+                                    "request": {
+                                        "method": "DELETE",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "subscriptions",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Transactions",
+                            "description": "Endpoints for Transactions",
+                            "item": [
+                                {
+                                    "name": "List Transactions",
+                                    "request": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "transactions"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Create Transaction",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"user\": 2,\n  \"amount\": \"49.99\",\n  \"transaction_type\": \"PUR\",\n  \"reference\": \"TXN-ABC123\",\n  \"description\": \"Monthly plan purchase\",\n  \"related_user\": null\n}"
+                                        },
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "transactions"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Retrieve Transaction",
+                                    "request": {
+                                        "method": "GET",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "transactions",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Update Transaction",
+                                    "request": {
+                                        "method": "PUT",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"amount\": \"59.99\",\n  \"transaction_type\": \"REF\",\n  \"description\": \"Refund issued\",\n  \"is_successful\": true\n}"
+                                        },
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "transactions",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "Delete Transaction",
+                                    "request": {
+                                        "method": "DELETE",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Token {{auth_token}}",
+                                                "type": "text"
+                                            }
+                                        ],
+                                        "url": {
+                                            "protocol": "http",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "port": "{{port}}",
+                                            "path": [
+                                                "api",
+                                                "billing",
+                                                "transactions",
+                                                "1"
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
