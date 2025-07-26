@@ -1,0 +1,6 @@
+mod_instantiate {
+    python {
+        module = "/home/ubuntu/wifi/main/hotspots/radius/auth.py"
+        func_authenticate = "radius_authenticate"
+    }
+}

@@ -1,0 +1,14 @@
+# /etc/systemd/system/hotspot.service
+[Unit]
+Description=WiFi Hotspot Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/home/raphael/Public/Development/wifi/main/scripts/production/start-ap.sh start
+ExecStop=/home/raphael/Public/Development/wifi/main/scripts/production/start-ap.sh stop
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,4 @@
+# main/urls.py
 """
 URL configuration for core project.
 
@@ -21,7 +22,7 @@ from rest_framework.authtoken.views import obtain_auth_token
 
 from accounts.views import UserViewSet
 from analytics.views import DailyUsageViewSet, RevenueRecordViewSet
-from hotspots.views import HotspotLocationViewSet, HotspotViewSet, SessionViewSet
+from hotspots.views import HotspotLocationViewSet, HotspotViewSet, SessionViewSet, HotspotAuthViewSet
 from billing.views import PlanViewSet, SubscriptionViewSet, TransactionViewSet
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
@@ -34,6 +35,7 @@ router.register(r'users', UserViewSet)
 router.register('locations', HotspotLocationViewSet, basename='locations')
 router.register('hotspots', HotspotViewSet, basename='hotspots')
 router.register('sessions', SessionViewSet, basename='sessions')
+router.register(r'hotspot-auth', HotspotAuthViewSet, basename='hotspot-auth')
 
 # For analytics
 router.register('analytics/daily-usage', DailyUsageViewSet, basename='daily-usage'),
@@ -57,6 +59,7 @@ urlpatterns = [
     path('', include('accounts.urls')),
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    # path('api/hotspots/auth/', hotspot_auth),
     path('api-auth/', include('rest_framework.urls')),
     path('api-token-auth/', obtain_auth_token),  # For token authentication
 ]

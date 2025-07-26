@@ -1,0 +1,22 @@
+server default {
+    listen {
+        type = auth
+        ipaddr = *
+        port = 1812
+    }
+
+    authorize {
+        python
+        if (ok || updated) {
+            update control {
+                Auth-Type := Python
+            }
+        }
+    }
+
+    authenticate {
+        Auth-Type Python {
+            python
+        }
+    }
+}

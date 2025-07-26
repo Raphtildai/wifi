@@ -1,5 +1,4 @@
 # hotspots/views.py
-from hotspots.services import HotspotControlService
 from celery import shared_task
 from rest_framework import serializers 
 from django.db import IntegrityError
@@ -8,8 +7,6 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from django.utils import timezone
-from django.core.management import call_command
 
 from .models import HotspotLocation, Hotspot, Session
 from .serializers import HotspotLocationSerializer, HotspotSerializer, SessionSerializer
@@ -18,13 +15,14 @@ from accounts.permissions import has_access_to_user
 from helpers.functions import filter_objects_by_user_access
 from main.exceptions import safe_destroy
 
-from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.viewsets import ViewSet
 from django.contrib.auth import authenticate
-from hotspots.tasks import control_hotspot_async
+from pyrad.packet import AccessAccept, AccessReject
+from .models import Hotspot
 
 class HotspotAuthViewSet(ViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -154,6 +152,90 @@ class HotspotLocationViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         return safe_destroy(instance, self.perform_destroy)
 
+# @shared_task(bind=True)
+# def control_hotspot_async(self, hotspot_id, action):
+#     try:
+#         from django.core.management import call_command
+#         from io import StringIO
+#         import json
+        
+#         # Capture command output
+#         out = StringIO()
+#         err = StringIO()
+        
+#         call_command(
+#             'hotspot_control', 
+#             action, 
+#             f'--hotspot-id={hotspot_id}',
+#             '--json',
+#             stdout=out,
+#             stderr=err
+#         )
+        
+#         output = out.getvalue()
+#         error_output = err.getvalue()
+        
+#         try:
+#             return json.loads(output)
+#         except json.JSONDecodeError:
+#             return {
+#                 'success': False,
+#                 'error': f"Invalid JSON response: {output}",
+#                 'raw_output': output,
+#                 'error_output': error_output
+#             }
+            
+#     except Exception as e:
+#         return {
+#             'success': False,
+#             'error': f"Task execution failed: {str(e)}"
+#         }
+
+@shared_task(bind=True)
+def control_hotspot_async(self, hotspot_id, action):
+    try:
+        from django.core.management import call_command
+        from hotspots.models import Hotspot
+        
+        hotspot = Hotspot.objects.get(id=hotspot_id)
+        
+        # Capture command output
+        from io import StringIO
+        import sys
+        from contextlib import redirect_stdout
+        
+        output = StringIO()
+        with redirect_stdout(output):
+            call_command(
+                'hotspot_control', 
+                action, 
+                f'--hotspot-id={hotspot_id}'
+            )
+        
+        # Verify the hotspot actually started
+        if action == 'start':
+            import time
+            time.sleep(3)  # Give it time to start
+            is_running = hotspot.get_status()
+            if not is_running:
+                raise Exception(f"Hotspot failed to start. Command output: {output.getvalue()}")
+        
+        return {
+            'success': True,
+            'action': action,
+            'hotspot_id': hotspot_id,
+            'ssid': hotspot.ssid,
+            'output': output.getvalue(),
+            'is_running': hotspot.get_status() if action == 'start' else False
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'hotspot_id': hotspot_id,
+            'action': action
+        }
+
 class HotspotViewSet(viewsets.ModelViewSet):
     serializer_class = HotspotSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminOrReadOnly]
@@ -210,15 +292,49 @@ class HotspotViewSet(viewsets.ModelViewSet):
         self.perform_update(serializer)
         return Response({"message": "Hotspot updated successfully", "data": serializer.data})
     
+    # def perform_create(self, serializer):
+    #     try:
+    #         hotspot = serializer.save(owner=self.request.user)
+    #         print(f"Hotspot created: {hotspot.ssid}")
+            
+    #         try:
+    #             # Start the hotspot and store the task ID
+    #             task = control_hotspot_async.delay(hotspot.id, 'start')
+    #             hotspot.current_task_id = task.id
+    #             hotspot.save()
+                
+    #         except Exception as e:
+    #             print(f"Failed to start hotspot async: {str(e)}")
+    #             raise serializers.ValidationError(
+    #                 {"error": f"Failed to start hotspot: {str(e)}"}
+    #             )
+                
+    #     except IntegrityError as e:
+    #         print(f"IntegrityError: {str(e)}")
+    #         raise serializers.ValidationError(
+    #             {"error": "You already have a hotspot with this SSID"}
+    #         )
+    #     except Exception as e:
+    #         print(f"General Error: {str(e)}")
+    #         hotspot.delete()
+    #         raise serializers.ValidationError(
+    #             {"error": f"Hotspot creation failed: {str(e)}"}
+    #         )
     def perform_create(self, serializer):
         try:
             hotspot = serializer.save(owner=self.request.user)
-            print(f"Hotspot created: {hotspot}")
+            print(f"Hotspot created: {hotspot.ssid}")
             
-            # Generate config and start hotspot
+            # Start the hotspot
             task = control_hotspot_async.delay(hotspot.id, 'start')
             hotspot.current_task_id = task.id
-            hotspot.is_active = False  # Will be updated by async task
+            print(f"Hotspot task id: {task.id}")
+            
+            # Wait briefly for initial status
+            import time
+            time.sleep(2)
+            hotspot.is_active = hotspot.get_status()
+            print(f"Hotspot status: {hotspot.get_status()}")
             hotspot.save()
             
         except IntegrityError as e:
@@ -241,54 +357,16 @@ class HotspotViewSet(viewsets.ModelViewSet):
                 f"Failed to stop hotspot: {str(e)}"
             )
         instance.delete()
-
-    @action(detail=True, methods=['post'])
-    def start(self, request, pk=None):
-        hotspot = self.get_object()
-        try:
-            service = HotspotControlService()
-            service.generate_env_file(hotspot)
-            result = service.execute_command('start', hotspot.id)
-            
-            if not result['success']:
-                raise Exception(result['error'])
-                
-            return Response({
-                'status': 'started',
-                'message': f'Hotspot {hotspot.ssid} started successfully'
-            })
-        except Exception as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['post'])
-    def stop(self, request, pk=None):
-        """Stop a specific hotspot"""
-        hotspot = self.get_object()
-        try:
-            task = control_hotspot_async.delay(hotspot.id, 'stop')
-            hotspot.current_task_id = task.id
-            hotspot.is_active = False
-            hotspot.save()
-            return Response({
-                'status': 'stopping',
-                'message': f'Hotspot {hotspot.ssid} is being stopped',
-                'task_id': task.id
-            })
-        except Exception as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    @action(detail=True, methods=['post'])
     def restart(self, request, pk=None):
-        """Restart a specific hotspot"""
+        """Restart hotspot asynchronously"""
         hotspot = self.get_object()
         try:
             task = control_hotspot_async.delay(hotspot.id, 'restart')
             hotspot.current_task_id = task.id
             hotspot.save()
+            
             return Response({
                 'status': 'restarting',
                 'message': f'Hotspot {hotspot.ssid} is being restarted',
@@ -299,6 +377,8 @@ class HotspotViewSet(viewsets.ModelViewSet):
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # 
+    
     @action(detail=True, methods=['get'])
     def task_status(self, request, pk=None):
         """Check status of an async hotspot task"""
@@ -324,34 +404,39 @@ class HotspotViewSet(viewsets.ModelViewSet):
             result = task.result
             response_data.update({
                 'success': result.get('success'),
-                'message': result.get('message', ''),
-                'error': result.get('error', ''),
-                'details': result.get('details', '')
+                'message': result.get('message'),
+                'error': result.get('error'),
+                'details': result.get('details')
             })
-            
-            # Update hotspot status if task completed
-            if result.get('success') and 'is_running' in result:
-                hotspot.is_active = result['is_running']
-                hotspot.save()
         
         return Response(response_data)
 
+    # @action(detail=True, methods=['get'])
+    # def status(self, request, pk=None):
+    #     """Check hotspot operational status"""
+    #     hotspot = self.get_object()
+    #     return Response({
+    #         'is_running': hotspot.get_status(),
+    #         'ssid': hotspot.ssid,
+    #         'interface': hotspot.interface
+    #     })
+
     @action(detail=True, methods=['get'])
     def status(self, request, pk=None):
-        """Check hotspot operational status"""
+        """Check hotspot operational status with verification"""
         hotspot = self.get_object()
         
         # Get system status
         is_running = hotspot.get_status()
         
-        # Sync with DB status
-        if hotspot.is_active != is_running:
-            hotspot.is_active = is_running
+        # If DB says active but system says not running, correct the DB
+        if hotspot.is_active and not is_running:
+            hotspot.is_active = False
             hotspot.save()
         
         return Response({
             'is_running': is_running,
-            'is_active': hotspot.is_active,
+            'is_active': hotspot.is_active,  # DB status
             'ssid': hotspot.ssid,
             'interface': hotspot.interface,
             'last_status_check': timezone.now()

@@ -1,0 +1,14 @@
+[Unit]
+Description=Hostapd Access Point for Testing
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/start-hostapd-test.sh
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

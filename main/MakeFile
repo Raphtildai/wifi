@@ -1,0 +1,26 @@
+# Initialize everything
+init:
+    sudo apt update
+    sudo apt install -y python3-venv python3-dev postgresql freeradius nginx supervisor
+    python3 -m venv venv
+    ./venv/bin/pip install -r requirements/production.txt
+
+# Deploy with migrations
+deploy:
+    git pull
+    ./venv/bin/python manage.py migrate
+    sudo systemctl restart freeradius nginx supervisor
+
+test-connectivity:
+    # Start test AP
+    ./scripts/simulate_ap.sh --ssid TestAP --channel 6 &
+    
+    # Run connectivity tests
+    pytest hotspots/tests/test_connectivity/ -v
+    
+    # Cleanup
+    pkill hostapd
+
+# Test RADIUS
+test-radius:
+    radtest testuser password localhost 1812 testing123

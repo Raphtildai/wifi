@@ -1,0 +1,8 @@
+# Reference your Django auth
+mod_instantiate {
+    python {
+        module = "/path/to/app/radius/auth.py"
+        func_instantiate = "instantiate"
+        func_authorize = "authorize"
+    }
+}

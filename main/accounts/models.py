@@ -1,4 +1,5 @@
 # accounts/models.py
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -47,6 +48,35 @@ class User(AbstractUser):
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.get_user_type_display()})"
 
+    # Checking Subscription
+    def has_active_subscription(self):
+        """
+        Check if user has an active subscription based on:
+        1. Active subscription record
+        2. Subscription end date
+        3. Account credit (for pay-as-you-go)
+        """
+        # Check for active time-based subscription
+        active_subscription = self.subscriptions.filter(
+            is_active=True,
+            end_date__gte=timezone.now()
+        ).exists()
+        
+        if active_subscription:
+            return True
+            
+        # For customers, check if they have positive credit (pay-as-you-go)
+        if self.user_type == UserType.CUSTOMER and self.credit > 0:
+            return True
+            
+        return False
+
+    def get_active_subscription(self):
+        """Get the user's current active subscription if it exists"""
+        return self.subscriptions.filter(
+            is_active=True,
+            end_date__gte=timezone.now()
+        ).first()
 
 class UserProfile(models.Model):
     user = models.OneToOneField(

@@ -1,0 +1,17 @@
+1. copy the contents of hostpad-test.env and paste it into the terminal
+    NB: Make sure you update the interface matching your actual interface name. Either run iw dev or ip link show
+2. Copy the contents of start-hostapd-test.sh and run
+3. Then make it executable (again if needed):
+    sudo chmod +x /usr/local/bin/start-hostapd-test.sh
+4. Restart the Systemd Service
+    sudo systemctl daemon-reload
+    sudo systemctl restart hostapd-test.service
+    sudo systemctl status hostapd-test.service
+5. To watch connection attempts:
+    sudo journalctl -fu hostapd-test.service
+6. How to stop it later:
+    sudo pkill hostapd
+    sudo pkill dnsmasq
+    sudo ip link set wlp0s20f3 down
+    sudo systemctl start NetworkManager.service
+

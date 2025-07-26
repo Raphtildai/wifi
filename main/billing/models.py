@@ -58,6 +58,23 @@ class Subscription(models.Model):
     def __str__(self):
         return f"{self.user.first_name} {self.user.last_name}'s {self.plan.name} subscription"
 
+    # Helper methods to subscription models
+    def is_currently_active(self):
+        """Check if this specific subscription is currently active"""
+        return self.is_active and self.end_date >= timezone.now()
+    
+    def renew(self, duration_days=None):
+        """Renew the subscription"""
+        duration = duration_days or self.plan.duration_days
+        self.end_date = timezone.now() + timezone.timedelta(days=duration)
+        self.is_active = True
+        self.save()
+    
+    def cancel(self):
+        """Cancel the subscription (set to inactive)"""
+        self.is_active = False
+        self.save()
+
 
 class Transaction(models.Model):
     class TransactionType(models.TextChoices):
