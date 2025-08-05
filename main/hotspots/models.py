@@ -98,6 +98,11 @@ class Hotspot(models.Model):
     
     def __str__(self):
         return f"{self.ssid} at {self.location.name}"
+
+    def clean(self):
+        from .services import HotspotControlService
+        if not HotspotControlService._validate_interface_for_ap(self.interface):
+            raise ValidationError(f"Interface {self.interface} is not suitable for AP mode")
     
     def start(self):
         """Start hotspot using service layer"""

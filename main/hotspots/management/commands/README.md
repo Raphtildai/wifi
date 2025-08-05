@@ -120,6 +120,13 @@ class Command(BaseCommand):
             self.stderr.write(f"Command failed: {e.stderr}")
 ```
 
+## Creating hotspot
+After creation, we can check:
+```bash
+sudo systemctl status hotspot_<hotspot_id>.service
+sudo journalctl -u hotspot_<hotspot_id>.service -n 20
+```
+
 ## Commands
 ### Django Integration Points:
 
@@ -251,14 +258,14 @@ dhclient -v wlan0
 ## Support
 
 For assistance, contact:
-- **Email**: support@yourcompany.com
+- **Email**: info@tildaitech.co.ke
 - **Slack**: #hotspot-support
 - **Emergency**: +1 (555) 123-4567 (24/7)
 
 ---
 
 > **Note**: Always test in a staging environment before production deployment.  
-> Last Updated: 2023-11-15 | Version: 2.1.0
+> Last Updated: 2025-08-01 | Version: 2.1.0
 ```
 
 This README provides:
@@ -267,5 +274,3 @@ This README provides:
 3. Comprehensive troubleshooting guide
 4. Security best practices
 5. Maintenance procedures
-
-Simply copy this content into a `README.md` file in your project root directory. Customize the contact information and version details as needed.

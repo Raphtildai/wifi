@@ -9,6 +9,13 @@ LOG_FILE="/var/log/prod_ap.log"
 ACTION="${1:-start}"  # Default to 'start' if no action provided
 HOTSPOT_ID="${2:-}"   # Optional hotspot ID
 
+# Systemd-Specific wireless reset handling
+SYSTEMD_RUNNING=0
+if systemd-detect-virt --quiet --container; then
+    SYSTEMD_RUNNING=1
+    log "⚠️ Running under systemd - adjusting behavior"
+fi
+
 log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
     echo "$msg" | tee -a "$LOG_FILE"
@@ -26,6 +33,9 @@ load_environment() {
     log "🔍 Checking for environment files..."
     log " - Hotspot specific: $hotspot_env"
     log " - Default: $default_env"
+
+    log "🔍 Current environment variables:"
+    printenv | sort | sed 's/^/    /' | tee -a "$LOG_FILE"
     
     # First try the hotspot-specific file
     if [ -f "$hotspot_env" ]; then
@@ -47,6 +57,80 @@ load_environment() {
     log "❌ No environment file found (tried $hotspot_env and $default_env)"
     exit 1
 }
+
+# Clean up
+cleanup() {
+    log "🧹 Cleaning up services..."
+    
+    # Stop services
+    sudo pkill hostapd 2>/dev/null || true
+    sudo pkill dnsmasq 2>/dev/null || true
+    
+    # Restore iptables
+    sudo iptables -t nat -D POSTROUTING -o "$WIRED_IFACE" -j MASQUERADE 2>/dev/null || true
+    sudo iptables -D FORWARD -i "$INTERFACE" -j ACCEPT 2>/dev/null || true
+    
+    # Reset interface
+    sudo ip link set "$INTERFACE" down 2>/dev/null || true
+    sudo ip addr flush dev "$INTERFACE" 2>/dev/null || true
+    sudo iw dev "$INTERFACE" set type managed 2>/dev/null || true
+    
+    # Restore NetworkManager
+    if [ -f /etc/NetworkManager/conf.d/99-hotspot.conf ]; then
+        sudo rm /etc/NetworkManager/conf.d/99-hotspot.conf
+    fi
+    
+    if systemctl is-active --quiet NetworkManager; then
+        log "🔄 Restoring NetworkManager control"
+        sudo nmcli device set "$INTERFACE" managed yes 2>/dev/null || true
+        sudo nmcli connection reload
+    else
+        sudo systemctl start NetworkManager 2>/dev/null || true
+    fi
+    
+    log "✅ Network services restored"
+}
+trap cleanup EXIT
+# cleanup() {
+#     log "🧹 Cleaning up services..."
+    
+#     # Stop services
+#     sudo pkill hostapd 2>/dev/null || true
+#     sudo pkill dnsmasq 2>/dev/null || true
+    
+#     # Restore iptables
+#     sudo iptables -t nat -D POSTROUTING -o "$WIRED_IFACE" -j MASQUERADE 2>/dev/null || true
+#     sudo iptables -D FORWARD -i "$INTERFACE" -j ACCEPT 2>/dev/null || true
+#     sudo iptables -D FORWARD -o "$INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+    
+#     # Reset interface
+#     sudo ip link set "$INTERFACE" down 2>/dev/null || true
+#     sudo ip addr flush dev "$INTERFACE" 2>/dev/null || true
+    
+#     # Restore NetworkManager
+#     if systemctl is-active --quiet NetworkManager; then
+#         log "🔄 Restoring NetworkManager control"
+#         sudo nmcli device set "$INTERFACE" managed yes 2>/dev/null || true
+#         sudo systemctl restart NetworkManager 2>/dev/null || true
+#     else
+#         sudo systemctl start NetworkManager 2>/dev/null || true
+#     fi
+    
+#     log "✅ Network services restored"
+# }
+# trap cleanup EXIT
+
+# Recover network
+recover_network() {
+    log "🔄 Attempting network recovery..."
+    sudo nmcli networking off
+    sleep 2
+    sudo nmcli networking on
+    sleep 5
+    sudo systemctl restart NetworkManager
+}
+trap recover_network EXIT
+
 
 # Handle different actions
 case "$ACTION" in
@@ -97,6 +181,31 @@ case "$ACTION" in
         ;;
 esac
 
+# Main interface detection
+log "🔍 Activating wireless interface..."
+INTERFACE=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
+if [[ -z "$INTERFACE" ]]; then
+    # Try alternative detection methods
+    INTERFACE=$(ls /sys/class/net | grep -E 'wlo|wlan|wlp' | head -n1)
+fi
+
+if [[ -z "$INTERFACE" ]]; then
+    log "❌ Could not detect wireless interface"
+    exit 1
+fi
+
+# Detect wired interface
+WIRED_IFACE=$(ip route | awk '/default/ {print $5}' | head -n1)
+if [[ -z "$WIRED_IFACE" ]] || [[ "$WIRED_IFACE" == "$INTERFACE" ]]; then
+    WIRED_IFACE=$(ip -o link show | awk -F': ' '{print $2}' | grep -vE 'lo|wlan|wlp|wlo' | head -n1)
+fi
+
+if [[ -z "$WIRED_IFACE" ]]; then
+    log "❌ Could not determine wired internet interface"
+    exit 1
+fi
+log "ℹ️ Using wired internet interface: $WIRED_IFACE"
+
 # Now verify required variables (after environment is loaded)
 if [[ "$ACTION" == "start" || "$ACTION" == "restart" ]]; then
     REQUIRED_VARS=(AP_IP NETMASK SSID PASSPHRASE CHANNEL DHCP_RANGE_START DHCP_RANGE_END DHCP_LEASE_TIME)
@@ -110,70 +219,40 @@ if [[ "$ACTION" == "start" || "$ACTION" == "restart" ]]; then
 fi
 
 # Enhanced wireless interface cleanup and activation
-reset_wireless_interface() {
-    local interface="$1"
-    
-    log "🔧 Performing full reset of wireless interface $interface..."
-    
-    # 1. Kill all possible conflicting processes
-    sudo pkill wpa_supplicant || true
-    sudo pkill dhclient || true
-    sudo pkill hostapd || true
-    sudo pkill dnsmasq || true
-    
-    # 2. Release interface from NetworkManager
-    if systemctl is-active --quiet NetworkManager; then
-        sudo nmcli device set "$interface" managed no 2>/dev/null || true
-        sudo nmcli dev disconnect "$interface" 2>/dev/null || true
-    fi
-    
-    # 3. Bring interface down and flush
-    sudo ip link set "$interface" down 2>/dev/null || true
-    sudo ip addr flush dev "$interface" 2>/dev/null || true
-    
-    # 4. Unblock WiFi
-    sudo rfkill unblock all
-    
-    # 5. Reset wireless hardware (Intel specific)
-    if lsmod | grep -q iwlwifi; then
-        log "🔧 Resetting Intel wireless hardware..."
-        sudo modprobe -r iwlmvm 2>/dev/null || true
-        sudo modprobe -r mac80211 2>/dev/null || true
-        sudo modprobe -r cfg80211 2>/dev/null || true
-        sudo modprobe -r iwlwifi 2>/dev/null || true
-        sleep 3
-        sudo modprobe iwlwifi 2>/dev/null || true
-        sudo modprobe cfg80211 2>/dev/null || true
-        sudo modprobe mac80211 2>/dev/null || true
-        sudo modprobe iwlmvm 2>/dev/null || true
-        sleep 3
-    fi
-    
-    # 6. Bring interface back up
-    sudo ip link set "$interface" up
-    sleep 2
-    
-    # 7. Verify interface is available
-    if ! iwconfig "$interface" >/dev/null 2>&1; then
-        log "❌ Failed to reset wireless interface $interface"
-        return 1
-    fi
-    
-    log "✅ Successfully reset wireless interface $interface"
-    return 0
-}
-
-# Main interface detection
-log "🔍 Activating wireless interface..."
-INTERFACE=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
-if [[ -z "$INTERFACE" ]]; then
-    # Try alternative detection methods
-    INTERFACE=$(ls /sys/class/net | grep -E 'wlo|wlan|wlp' | head -n1)
-fi
-
-if [[ -z "$INTERFACE" ]]; then
-    log "❌ Could not detect wireless interface"
-    exit 1
+if [ "$SYSTEMD_RUNNING" -eq 1 ]; then
+    log "🔧 Systemd mode: Skipping aggressive driver reloads"
+else
+    reset_wireless_interface() {
+        local interface="$1"
+        
+        log "🔧 Performing safe reset of $interface..."
+        
+        # 1. Release from NetworkManager gently
+        if systemctl is-active --quiet NetworkManager; then
+            sudo nmcli device disconnect "$interface" 2>/dev/null || true
+            sudo nmcli device set "$interface" managed no 2>/dev/null || true
+        fi
+        
+        # 2. Basic interface reset
+        sudo ip link set "$interface" down
+        sudo ip addr flush dev "$interface"
+        sudo iw dev "$interface" set type managed
+        sudo rfkill unblock wifi
+        
+        # 3. Bring back up
+        sudo ip link set "$interface" up
+        sleep 2
+        
+        # 4. Verify
+        if ! iwconfig "$interface" >/dev/null 2>&1; then
+            log "⚠️ Soft reset failed, trying more aggressive approach"
+            sudo systemctl restart NetworkManager
+            sleep 3
+            sudo ip link set "$interface" up
+        fi
+        
+        log "✅ Interface $interface reset"
+    }
 fi
 
 # Perform full reset of the interface
@@ -188,18 +267,6 @@ if ! reset_wireless_interface "$INTERFACE"; then
 fi
 log "✅ Wireless interface activated: $INTERFACE"
 
-# Detect wired interface
-WIRED_IFACE=$(ip route | awk '/default/ {print $5}' | head -n1)
-if [[ -z "$WIRED_IFACE" ]] || [[ "$WIRED_IFACE" == "$INTERFACE" ]]; then
-    WIRED_IFACE=$(ip -o link show | awk -F': ' '{print $2}' | grep -vE 'lo|wlan|wlp|wlo' | head -n1)
-fi
-
-if [[ -z "$WIRED_IFACE" ]]; then
-    log "❌ Could not determine wired internet interface"
-    exit 1
-fi
-log "ℹ️ Using wired internet interface: $WIRED_IFACE"
-
 # Verify required variables
 REQUIRED_VARS=(AP_IP NETMASK SSID PASSPHRASE CHANNEL DHCP_RANGE_START DHCP_RANGE_END DHCP_LEASE_TIME)
 for var in "${REQUIRED_VARS[@]}"; do
@@ -213,43 +280,30 @@ done
 HOSTAPD_CONF="/etc/hostapd-prod/hostapd.conf"
 DNSMASQ_CONF="/etc/hostapd-prod/dnsmasq.conf"
 
-cleanup() {
-    log "🧹 Cleaning up services..."
-    
-    # Stop services
-    sudo pkill hostapd 2>/dev/null || true
-    sudo pkill dnsmasq 2>/dev/null || true
-    
-    # Restore iptables
-    sudo iptables -t nat -D POSTROUTING -o "$WIRED_IFACE" -j MASQUERADE 2>/dev/null || true
-    sudo iptables -D FORWARD -i "$INTERFACE" -j ACCEPT 2>/dev/null || true
-    sudo iptables -D FORWARD -o "$INTERFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
-    
-    # Reset interface
-    sudo ip link set "$INTERFACE" down 2>/dev/null || true
-    sudo ip addr flush dev "$INTERFACE" 2>/dev/null || true
-    
-    # Restore NetworkManager
-    if systemctl is-active --quiet NetworkManager; then
-        log "🔄 Restoring NetworkManager control"
-        sudo nmcli device set "$INTERFACE" managed yes 2>/dev/null || true
-        sudo systemctl restart NetworkManager 2>/dev/null || true
-    else
-        sudo systemctl start NetworkManager 2>/dev/null || true
-    fi
-    
-    log "✅ Network services restored"
-}
-trap cleanup EXIT
-
 # NetworkManager handling
 if systemctl is-active --quiet NetworkManager; then
-    log "🔧 Taking control of $INTERFACE from NetworkManager"
-    sudo nmcli device set "$INTERFACE" managed no || {
-        log "⚠️ Could not set interface to unmanaged, stopping NetworkManager"
+    log "🔧 Disabling NetworkManager control of $INTERFACE..."
+    sudo nmcli device set "$INTERFACE" managed no 2>/dev/null || {
+        log "⚠️ Could not set unmanaged, stopping NetworkManager"
         sudo systemctl stop NetworkManager
+        sleep 2
     }
+    
+    # Add persistent unmanaged
+    if [ -d /etc/NetworkManager/conf.d ]; then
+        echo -e "[keyfile]\nunmanaged-devices=interface-name:$INTERFACE" | \
+        sudo tee /etc/NetworkManager/conf.d/99-hotspot.conf >/dev/null
+        sudo systemctl restart NetworkManager
+        sleep 2
+    fi
 fi
+# if systemctl is-active --quiet NetworkManager; then
+#     log "🔧 Taking control of $INTERFACE from NetworkManager"
+#     sudo nmcli device set "$INTERFACE" managed no || {
+#         log "⚠️ Could not set interface to unmanaged, stopping NetworkManager"
+#         sudo systemctl stop NetworkManager
+#     }
+# fi
 
 # Convert netmask to CIDR
 netmask_to_cidr() {
@@ -304,7 +358,7 @@ wpa_passphrase=$PASSPHRASE
 wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
 auth_algs=1
-daemonize=0
+# daemonize=0
 
 # Performance settings
 beacon_int=100
@@ -367,10 +421,6 @@ sudo ip link set $INTERFACE down
 sleep 1
 sudo ip link set $INTERFACE up
 sleep 1
-
-if ! iw dev $INTERFACE info | grep -q "type AP"; then
-    log "ℹ️ Current interface type: $(iw dev $INTERFACE info | grep type)"
-fi
 
 # Start hostapd in foreground for better debugging
 log "🚀 Starting hostapd (debug mode)..."

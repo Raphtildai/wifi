@@ -73,6 +73,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'main.middleware.CustomExceptionMiddleware', # Error Handling middleware
+    'main.middleware.LoggingMiddleware', # Logging middleware
 ]
 
 ROOT_URLCONF = 'main.urls'
@@ -179,3 +180,60 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# settings.py
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'debug.log'),
+            'formatter': 'verbose',
+            'maxBytes': 1024*1024*5,  # 5MB
+            'backupCount': 5,
+        },
+        'hotspot_file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'hotspot.log'),
+            'formatter': 'verbose'
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'hotspots': {
+            'handlers': ['hotspot_file', 'console'],
+            'level': 'DEBUG',
+        },
+        'accounts': {
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+        },
+        'main': {
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+        },
+    },
+}

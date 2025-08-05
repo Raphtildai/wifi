@@ -20,4 +20,4 @@ app.autodiscover_tasks()
 # journalctl -u hostapd -f
 
 
-# sudo modprobe -r iwlwifi && sudo modprobe iwlwifi)
+# sudo modprobe -r iwlwifi && sudo modprobe iwlwifi
