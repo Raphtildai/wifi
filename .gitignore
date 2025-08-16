@@ -10,3 +10,7 @@ venv/
 # Logs folder
 logs/
 .logs/
+
+# tmp folder
+tmp
+.tmp/
