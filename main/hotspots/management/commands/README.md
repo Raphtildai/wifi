@@ -72,9 +72,7 @@ COUNTRY_CODE=US
 ### Model Extensions
 Add to `hotspots/models.py`:
 ```python
-class Hotspot(models.Model):
-    # ... existing fields ...
-    
+class Hotspot(models.Model):    
     def control(self, action):
         """Execute hotspot control command"""
         from django.core.management import call_command

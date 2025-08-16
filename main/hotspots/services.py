@@ -1,3 +1,5 @@
+# hotspots/services.py
+
 import os
 import time
 import subprocess
@@ -15,6 +17,50 @@ class HotspotControlService:
     HOTSPOT_SCRIPT_PATH = os.path.join(
         settings.BASE_DIR, 'scripts', 'production', 'django_script.sh'
     )
+
+    # Function to get detailed service status for debugging
+    def get_service_status(self, hotspot_id):
+        """Get detailed service status for debugging"""
+        try:
+            # Get systemd status
+            systemd_status = subprocess.run(
+                ['sudo', 'systemctl', 'status', f'hotspot_{hotspot_id}.service'],
+                capture_output=True,
+                text=True
+            ).stdout
+            
+            # Get process info
+            processes = []
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if 'hostapd' in proc.info['name'].lower() or 'dnsmasq' in proc.info['name'].lower():
+                        processes.append({
+                            'pid': proc.info['pid'],
+                            'name': proc.info['name'],
+                            'cmdline': ' '.join(proc.info['cmdline'] or [])
+                        })
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
+            # Get interface info if available
+            hotspot = Hotspot.objects.filter(id=hotspot_id).first()
+            interface_info = None
+            if hotspot and hotspot.interface:
+                interface_info = subprocess.run(
+                    ['sudo', 'ip', 'link', 'show', hotspot.interface],
+                    capture_output=True,
+                    text=True
+                ).stdout
+            
+            return {
+                'systemd_status': systemd_status,
+                'processes': processes,
+                'interface_info': interface_info,
+                'is_running': self.is_hotspot_running(hotspot_id)
+            }
+            
+        except Exception as e:
+            return f"Failed to get status: {str(e)}"
 
     @classmethod
     def _verify_script(cls):
@@ -50,110 +96,92 @@ class HotspotControlService:
 
     @classmethod
     def generate_env_file(cls, hotspot):
-        """Generate environment file for hotspot with logging and interface auto-detection"""
-        logger.info(f"Generating env file for hotspot {hotspot.id}")
-        config_dir = '/tmp/hostapd-prod'
-        
+        """Generate only hotspot-specific variables"""
+        config_dir = os.path.join(settings.BASE_DIR, 'tmp/hostapd-prod')
         try:
-            # First attempt to activate wireless interfaces
-            cls._activate_wireless_interfaces()
-
-            # Auto-detect wireless interface
-            wireless_interfaces = cls._detect_wireless_interfaces()
-            if not wireless_interfaces:
-                raise Exception("No wireless interfaces found")
+            os.makedirs(config_dir, exist_ok=True, mode=0o777)
+            config_path = os.path.join(config_dir, f'hotspot_{hotspot.id}.env')
             
-            # Find first interface that supports AP mode
-            valid_interface = None
-            for iface in wireless_interfaces:
-                if cls._validate_interface_for_ap(iface):
-                    valid_interface = iface
-                    break
-                    
-            if not valid_interface:
-                raise Exception("No suitable wireless interface found (must support AP mode)")
-                
-            logger.info(f"Using wireless interface: {valid_interface}")
-                
-            # Use the valid_interface found available wireless interface
-            if valid_interface:
-                wireless_interface = valid_interface
-            else:
-                raise Exception("No valid wireless interface found")
-            logger.info(f"Auto-detected wireless interface: {wireless_interface}")
-            
-            os.makedirs(config_dir, exist_ok=True)
-            logger.debug(f"Created config directory {config_dir}")
-            
-            config_path = f'{config_dir}/hotspot_{hotspot.id}.env'
             with open(config_path, 'w') as f:
-                f.write(f"""# Hostapd production environment config
-    ENABLE_LOG="1"
-    LOG_FILE="/var/log/prod_ap_{hotspot.id}.log"
-    INTERFACE="{wireless_interface}"
-    SSID="{hotspot.ssid}"
-    PASSPHRASE="{hotspot.password}"
-    AP_IP="192.168.{hotspot.id}.1"
-    NETMASK="255.255.255.0"
-    CHANNEL={hotspot.channel or 6}
-
-    # DHCP config
-    DHCP_RANGE_START="192.168.{hotspot.id}.10"
-    DHCP_RANGE_END="192.168.{hotspot.id}.100"
-    DHCP_LEASE_TIME="12h"
-    INTERNET_IFACE="eth0"
-    """)
-            os.chmod(config_path, 0o644)
-            logger.info(f"Env file generated at {config_path}")
+                f.write(f"""# Hotspot-specific overrides
+SSID={hotspot.ssid}
+PASSWORD={hotspot.password}
+CHANNEL={hotspot.channel or 6}
+""")
+            os.chmod(config_path, 0o666)  # Make file writable by others
             return config_path
+        except Exception as e:
+            logger.error(f"Failed to create env file: {str(e)}")
+            raise
+    
+    @classmethod
+    def verify_ap_mode_support(cls, interface):
+        """More robust AP mode verification"""
+        try:
+            # First check if interface exists
+            if not os.path.exists(f'/sys/class/net/{interface}'):
+                logger.warning(f"Interface {interface} not found in /sys/class/net")
+                return False
+
+            # Check rfkill status
+            rfkill_result = subprocess.run(
+                ['sudo', 'rfkill', 'list'],
+                capture_output=True,
+                text=True
+            )
+            if 'blocked: yes' in rfkill_result.stdout:
+                logger.info(f"Wireless is blocked, attempting to unblock")
+                subprocess.run(['sudo', 'rfkill', 'unblock', 'wifi'], check=True)
+
+            # Check AP mode support with sudo
+            result = subprocess.run(
+                ['sudo', 'iw', interface, 'info'],
+                capture_output=True,
+                text=True
+            )
+            
+            # Check both supported and current modes
+            if 'AP' not in result.stdout and '* AP' not in result.stdout:
+                logger.error(f"Interface {interface} doesn't support AP mode")
+                logger.debug(f"iw info output:\n{result.stdout}")
+                return False
+                
+            return True
             
         except Exception as e:
-            logger.error(f"Failed to generate env file: {str(e)}", exc_info=True)
-            raise Exception(f"Environment file generation failed: {str(e)}")
+            logger.error(f"AP mode verification failed: {str(e)}")
+            return False
 
     @classmethod
     def _validate_interface_for_ap(cls, interface):
-        """Interface validation"""
+        """Enhanced interface validation"""
         try:
-            # 1. Check if interface exists and is up
+            # 1. Check interface exists
+            if not os.path.exists(f'/sys/class/net/{interface}'):
+                logger.warning(f"Interface {interface} not found")
+                return False
+
+            # 2. Ensure interface is up
             link_result = subprocess.run(
-                ['ip', 'link', 'show', interface],
+                ['sudo', 'ip', 'link', 'show', interface],
                 capture_output=True,
                 text=True
             )
             if 'state DOWN' in link_result.stdout:
-                logger.warning(f"Interface {interface} is down, attempting to bring up")
-                subprocess.run(['sudo', 'ip', 'link', 'set', interface, 'up'], check=True)
-            
-            # 2. Check AP support
-            iw_result = subprocess.run(
-                ['iw', interface, 'info'],
-                capture_output=True,
-                text=True
-            )
-            
-            # Check both '*' and supported modes
-            if 'AP' not in iw_result.stdout and '* AP' not in iw_result.stdout:
-                logger.error(f"Interface {interface} doesn't show AP mode support")
-                return False
-            
-            # 3. Check rfkill status
-            rfkill_result = subprocess.run(
-                ['rfkill', 'list'],
-                capture_output=True,
-                text=True
-            )
-            if f'{interface}:' in rfkill_result.stdout and 'blocked: yes' in rfkill_result.stdout:
-                logger.warning(f"Interface {interface} is blocked, attempting to unblock")
-                subprocess.run(['sudo', 'rfkill', 'unblock', 'wifi'], check=True)
-            
-            return True
-            
+                logger.info(f"Bringing up interface {interface}")
+                subprocess.run(
+                    ['sudo', 'ip', 'link', 'set', interface, 'up'],
+                    check=True
+                )
+
+            # 3. Verify AP mode support
+            return cls.verify_ap_mode_support(interface)
+
         except subprocess.CalledProcessError as e:
-            logger.error(f"Interface validation failed: {e.stderr}")
+            logger.error(f"Interface validation command failed: {e.stderr}")
             return False
         except Exception as e:
-            logger.error(f"Unexpected validation error: {str(e)}")
+            logger.error(f"Interface validation error: {str(e)}")
             return False
 
     @classmethod
@@ -177,7 +205,7 @@ class HotspotControlService:
             
             # Fallback to checking standard wireless interface names
             if not interfaces:
-                standard_names = ['wlan0', 'wlan1', 'wlo1', 'wlp2s0']
+                standard_names = ['wlo1', 'wlan0', 'wlan1', 'wlp2s0']
                 for name in standard_names:
                     if os.path.exists(f'/sys/class/net/{name}'):
                         interfaces.append(name)
@@ -305,253 +333,233 @@ WantedBy=multi-user.target
             logger.error(f"Service generation failed: {str(e)}", exc_info=True)
             raise Exception(f"Service generation failed: {str(e)}")
 
-    @classmethod
-    def execute_hotspot_command(cls, action, hotspot_id=None):
-        """Enhanced command execution with pre/post verification"""
+    def execute_hotspot_command(self, action, hotspot_id):
+        """Execute hotspot command with enhanced timeout handling"""
         try:
-            cls._verify_script()
+            self._verify_script()
+            self._activate_wireless_interfaces()
             
-            if action in ['start', 'stop', 'restart'] and hotspot_id:
-                service_name = f"hotspot_{hotspot_id}.service"
-                service_path = f"/etc/systemd/system/{service_name}"
-                
-                # Enhanced verification
+            # Check if already running before attempting start
+            if action == 'start' and self.is_hotspot_running(hotspot_id):
+                return {
+                    'success': True,
+                    'stdout': 'Hotspot already running',
+                    'stderr': '',
+                    'already_running': True
+                }
+            
+            # Prepare environment with default values
+            env = os.environ.copy()
+            env.update({
+                'WIRED_IFACE': '',
+                'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+            })
+            
+            # Execute with separate timeout for start vs other commands
+            timeout = 120 if action == 'start' else 30
+            
+            try:
+                result = subprocess.run(
+                    ['sudo', self.HOTSPOT_SCRIPT_PATH, action, str(hotspot_id)],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    env=env
+                )
+            except subprocess.TimeoutExpired:
+                # For start commands, check if it actually started despite timeout
                 if action == 'start':
-                    if not os.path.exists(service_path):
-                        logger.warning(f"Service file missing, attempting to regenerate")
-                        cls.generate_systemd_service(Hotspot.objects.get(id=hotspot_id))
-                        
-                    # Double-check existence
-                    if not os.path.exists(service_path):
-                        raise Exception(f"Service file {service_name} does not exist at {service_path}")
-                
-                cmd = ['sudo', 'systemctl', action, service_name]
-            else:
-                cmd = ['sudo', cls.HOTSPOT_SCRIPT_PATH, action]
-                if hotspot_id:
-                    cmd.append(str(hotspot_id))
-
-            # Execute with timeout and enhanced logging
-            logger.debug(f"Executing: {' '.join(cmd)}")
-            result = subprocess.run(
-                cmd,
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=30
-            )
+                    time.sleep(5)  # Additional time for startup
+                    if self.is_hotspot_running(hotspot_id):
+                        return {
+                            'success': True,
+                            'stdout': 'Hotspot started (despite timeout)',
+                            'stderr': 'Command timed out but service is running',
+                            'timed_out': True
+                        }
+                raise
             
-            logger.debug(f"Command result: {result.returncode}")
-            logger.debug(f"stdout: {result.stdout[:200]}...")
-            logger.debug(f"stderr: {result.stderr[:200]}...")
-            
-            # Enhanced post-start verification
-            if action == 'start' and hotspot_id:
-                time.sleep(5)  # Give service time to start
-                is_running = cls.is_hotspot_running(hotspot_id)
-                if not is_running:
-                    result.returncode = 1
-                    result.stderr += "\nPost-start verification failed - service not running"
-                    logger.error("Post-start verification failed")
-                    
-                    # Additional diagnostics
-                    journal = subprocess.run(
-                        ['sudo', 'journalctl', '-u', service_name, '-n', '10', '--no-pager'],
-                        capture_output=True,
-                        text=True
-                    ).stdout
-                    logger.error(f"Service journal:\n{journal}")
+            # For start commands, verify the service actually started
+            if action == 'start':
+                time.sleep(3)  # Brief delay for service initialization
+                if not self.is_hotspot_running(hotspot_id):
+                    return {
+                        'success': False,
+                        'stdout': result.stdout,
+                        'stderr': result.stderr + '\nPost-start verification failed',
+                        'already_running': False
+                    }
             
             return {
                 'success': result.returncode == 0,
-                'returncode': result.returncode,
                 'stdout': result.stdout,
                 'stderr': result.stderr,
-                'command': ' '.join(cmd),
-                'verified': action == 'start' and hotspot_id and result.returncode == 0
+                'already_running': False
             }
-        except Exception as e:
-            logger.error(f"Command execution failed: {str(e)}", exc_info=True)
+            
+        except subprocess.TimeoutExpired as e:
             return {
                 'success': False,
-                'error': str(e),
-                'returncode': -2
+                'stdout': '',
+                'stderr': f"Command timed out after {e.timeout} seconds",
+                'timed_out': True
             }
-    
+        except Exception as e:
+            return {
+                'success': False,
+                'stdout': '',
+                'stderr': str(e)
+            }
 
-#     @classmethod
-#     def generate_systemd_service(cls, hotspot):
-#         """Generate systemd service file with comprehensive logging"""
-#         logger.info(f"Generating systemd service for hotspot {hotspot.id}")
-        
-#         try:
-#             # Create temp directory
-#             temp_dir = '/tmp/hotspot_services'
-#             os.makedirs(temp_dir, exist_ok=True)
-#             logger.debug(f"Created temp directory {temp_dir}")
-
-#             # Generate environment file
-#             env_file = cls.generate_env_file(hotspot)
-            
-#             # Create service file content
-#             service_content = f"""[Unit]
-# Description=Hotspot Service for {hotspot.ssid}
-# After=network.target
-# Requires=network.target
-# ConditionPathExists=/sys/class/net/{{INTERFACE}}
-# ConditionCapability=CAP_NET_ADMIN
-
-# [Service]
-# Type=simple
-# EnvironmentFile={env_file}
-# ExecStart={cls.HOTSPOT_SCRIPT_PATH} start {hotspot.id}
-# ExecStop={cls.HOTSPOT_SCRIPT_PATH} stop {hotspot.id}
-# Restart=on-failure
-# RestartSec=5s
-
-# [Install]
-# WantedBy=multi-user.target
-# """
-#             # Write to temp location
-#             temp_path = f"{temp_dir}/hotspot_{hotspot.id}.service"
-#             with open(temp_path, 'w') as f:
-#                 f.write(service_content)
-#             logger.debug(f"Temporary service file created at {temp_path}")
-
-#             # Move to system directory
-#             subprocess.run(
-#                 ['sudo', 'mv', temp_path, '/etc/systemd/system/'],
-#                 check=True,
-#                 stdout=subprocess.PIPE,
-#                 stderr=subprocess.PIPE
-#             )
-#             logger.debug("Service file moved to systemd directory")
-
-#             # Set permissions
-#             subprocess.run(
-#                 ['sudo', 'chmod', '644', f'/etc/systemd/system/hotspot_{hotspot.id}.service'],
-#                 check=True
-#             )
-#             logger.debug("Service file permissions set")
-
-#             # Reload systemd
-#             subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
-#             logger.info("Systemd daemon reloaded")
-
-#             return f'/etc/systemd/system/hotspot_{hotspot.id}.service'
-
-#         except subprocess.CalledProcessError as e:
-#             logger.error(f"Command failed: {e.stderr.decode().strip()}")
-#             if os.path.exists(temp_path):
-#                 os.remove(temp_path)
-#                 logger.debug("Cleaned up temporary service file")
-#             raise Exception(f"Service installation failed: {e.stderr.decode().strip()}")
-#         except Exception as e:
-#             logger.error(f"Service generation failed: {str(e)}", exc_info=True)
-#             raise Exception(f"Service generation failed: {str(e)}")
-
-#     @classmethod
-#     def execute_hotspot_command(cls, action, hotspot_id=None):
-#         """Enhanced command execution with pre/post verification"""
-#         try:
-#             cls._verify_script()
-            
-#             if action in ['start', 'stop', 'restart'] and hotspot_id:
-#                 service_name = f"hotspot_{hotspot_id}.service"
-                
-#                 # Verify service exists before trying to control it
-#                 if action == 'start' and not os.path.exists(f'/etc/systemd/system/{service_name}'):
-#                     raise Exception(f"Service file {service_name} does not exist")
-                
-#                 cmd = ['sudo', 'systemctl', action, service_name]
-#             else:
-#                 cmd = ['sudo', cls.HOTSPOT_SCRIPT_PATH, action]
-#                 if hotspot_id:
-#                     cmd.append(str(hotspot_id))
-
-#             # Execute with timeout
-#             result = subprocess.run(
-#                 cmd,
-#                 check=False,
-#                 stdout=subprocess.PIPE,
-#                 stderr=subprocess.PIPE,
-#                 text=True,
-#                 timeout=30
-#             )
-            
-#             # For start commands, wait a moment then verify
-#             if action == 'start' and hotspot_id:
-#                 import time
-#                 time.sleep(5)  # Give service time to start
-#                 is_running = cls.is_hotspot_running(hotspot_id)
-#                 if not is_running:
-#                     result.returncode = 1
-#                     result.stderr += "\nPost-start verification failed - service not running"
-            
-#             return {
-#                 'success': result.returncode == 0,
-#                 'returncode': result.returncode,
-#                 'stdout': result.stdout,
-#                 'stderr': result.stderr,
-#                 'command': ' '.join(cmd),
-#                 'verified': action == 'start' and hotspot_id and result.returncode == 0
-#             }
-
-#         except subprocess.TimeoutExpired:
-#             return {
-#                 'success': False,
-#                 'error': "Command timed out",
-#                 'returncode': -1
-#             }
-#         except Exception as e:
-#             return {
-#                 'success': False,
-#                 'error': str(e),
-#                 'returncode': -2
-#             }
-
-    @classmethod
-    def is_hotspot_running(cls, hotspot_id):
-        """More thorough check of hotspot status"""
+    def _force_stop_hotspot(self, hotspot_id):
+        """Force stop hotspot by killing processes and resetting interface"""
         try:
-            # 1. Check systemd status
-            service_name = f"hotspot_{hotspot_id}.service"
+            # Kill any remaining processes
+            subprocess.run(['sudo', 'pkill', '-f', f'hotspot_{hotspot_id}'], timeout=10)
+            subprocess.run(['sudo', 'pkill', '-f', 'hostapd'], timeout=10)
+            subprocess.run(['sudo', 'pkill', '-f', 'dnsmasq'], timeout=10)
+            
+            # Reset the interface
+            hotspot = Hotspot.objects.filter(id=hotspot_id).first()
+            if hotspot and hotspot.interface:
+                subprocess.run(['sudo', 'ip', 'link', 'set', hotspot.interface, 'down'], timeout=5)
+            
+            # Stop systemd service
+            subprocess.run(['sudo', 'systemctl', 'stop', f'hotspot_{hotspot_id}.service'], timeout=10)
+            
+            time.sleep(1)
+        except Exception as e:
+            logger.error(f"Force stop failed: {str(e)}")
+            
+    # def execute_hotspot_command(self, action, hotspot_id):
+    #     """Execute hotspot command with proper running state detection"""
+    #     try:
+    #         self._verify_script()
+    #         self._activate_wireless_interfaces()
+            
+    #         # Check if already running before attempting start
+    #         if action == 'start' and self.is_hotspot_running(hotspot_id):
+    #             return {
+    #                 'success': True,
+    #                 'stdout': 'Hotspot already running',
+    #                 'stderr': '',
+    #                 'already_running': True
+    #             }
+            
+    #         # Execute the command
+    #         result = subprocess.run(
+    #             ['sudo', self.HOTSPOT_SCRIPT_PATH, action, str(hotspot_id)],
+    #             capture_output=True,
+    #             text=True,
+    #             timeout=30
+    #         )
+            
+    #         # For start commands, verify the service actually started
+    #         if action == 'start':
+    #             time.sleep(2)  # Brief delay for service initialization
+    #             if not self.is_hotspot_running(hotspot_id):
+    #                 return {
+    #                     'success': False,
+    #                     'stdout': result.stdout,
+    #                     'stderr': result.stderr + '\nPost-start verification failed',
+    #                     'already_running': False
+    #                 }
+            
+    #         return {
+    #             'success': result.returncode == 0,
+    #             'stdout': result.stdout,
+    #             'stderr': result.stderr,
+    #             'already_running': False
+    #         }
+            
+    #     except Exception as e:
+    #         return {
+    #             'success': False,
+    #             'stdout': '',
+    #             'stderr': str(e),
+    #             'already_running': False
+    #         }
+
+    def is_hotspot_running(self, hotspot_id):
+        """Comprehensive hotspot status check"""
+        try:
+            # 1. Check systemd status first
             status_result = subprocess.run(
-                ['sudo', 'systemctl', 'is-active', service_name],
+                ['sudo', 'systemctl', 'is-active', f'hotspot_{hotspot_id}.service'],
                 capture_output=True,
                 text=True
             )
             
-            # 2. Check process list
-            process_running = False
+            # If systemd says it's active, trust that
+            if status_result.stdout.strip() == 'active':
+                return True
+                
+            # 2. Check for running processes (fallback)
+            hostapd_running = False
+            dnsmasq_running = False
+            
             for proc in psutil.process_iter(['name', 'cmdline']):
                 try:
-                    if 'hostapd' in proc.info['name'].lower():
-                        if any(f'hotspot_{hotspot_id}' in cmd for cmd in proc.info['cmdline']):
-                            process_running = True
-                            break
+                    cmdline = ' '.join(proc.info['cmdline'] or [])
+                    if 'hostapd' in proc.info['name'].lower() and f'hotspot_{hotspot_id}' in cmdline:
+                        hostapd_running = True
+                    if 'dnsmasq' in proc.info['name'].lower() and f'hotspot_{hotspot_id}' in cmdline:
+                        dnsmasq_running = True
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
             
-            # 3. Verify network interface
-            interface_up = False
-            if hotspot := Hotspot.objects.filter(id=hotspot_id).first():
+            # 3. Check interface state if available
+            hotspot = Hotspot.objects.filter(id=hotspot_id).first()
+            interface_up = True  # Assume true if we can't check
+            if hotspot and hotspot.interface:
                 ifconfig = subprocess.run(
-                    ['sudo', 'ifconfig', hotspot.interface],
+                    ['sudo', 'ip', 'link', 'show', hotspot.interface],
                     capture_output=True,
                     text=True
                 )
-                interface_up = "UP" in ifconfig.stdout
-                
+                interface_up = "state UP" in ifconfig.stdout
+            
+            # Consider running if either:
+            # - systemd reports active, OR
+            # - both processes are running and interface is up
             return (
-                status_result.returncode == 0 and 
-                process_running and 
-                interface_up
+                status_result.stdout.strip() == 'active' or 
+                (hostapd_running and dnsmasq_running and interface_up)
             )
             
         except Exception as e:
             logger.error(f"Status check failed: {str(e)}")
+            return False
+    
+    def _verify_service_running(self, hotspot_id):
+        """More accurate service verification"""
+        try:
+            # First check systemd status
+            status = subprocess.run(
+                ['sudo', 'systemctl', 'is-active', f'hotspot_{hotspot_id}.service'],
+                capture_output=True,
+                text=True
+            )
+            
+            # Also check for running processes
+            hostapd_running = False
+            dnsmasq_running = False
+            for proc in psutil.process_iter(['name']):
+                if 'hostapd' in proc.info['name'].lower():
+                    hostapd_running = True
+                if 'dnsmasq' in proc.info['name'].lower():
+                    dnsmasq_running = True
+            
+            # Service is considered running if either:
+            # 1. Systemd reports it's active, OR
+            # 2. Both required processes are running
+            return (
+                status.stdout.strip() == 'active' or 
+                (hostapd_running and dnsmasq_running)
+            )
+            
+        except Exception as e:
+            logger.error(f"Verification error: {str(e)}")
             return False
             
     @classmethod

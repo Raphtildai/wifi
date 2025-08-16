@@ -9,6 +9,10 @@ LOG_FILE="/var/log/prod_ap.log"
 ACTION="${1:-start}"  # Default to 'start' if no action provided
 HOTSPOT_ID="${2:-}"   # Optional hotspot ID
 
+# Interface detection
+DETECTED_INTERFACE=$(iw dev | awk '$1=="Interface"{print $2}' | head -1)
+[ -z "$DETECTED_INTERFACE" ] && DETECTED_INTERFACE="wlo1"
+
 # Systemd-Specific wireless reset handling
 SYSTEMD_RUNNING=0
 if systemd-detect-virt --quiet --container; then
@@ -25,37 +29,69 @@ log "🔧 Starting hotspot control with action: $ACTION, hotspot ID: ${HOTSPOT_I
 
 # Environment loading with better debugging
 load_environment() {
-    local hotspot_id="$1"
+    local config_id="$1"
     local default_env="/etc/hostapd-prod.env"
-    local hotspot_env="/tmp/hostapd-prod/hotspot_${hotspot_id}.env"
+    local hotspot_env="/tmp/hostapd-prod/hotspot_${config_id}.env"
     
-    # Debug: Show which files we're checking
-    log "🔍 Checking for environment files..."
-    log " - Hotspot specific: $hotspot_env"
-    log " - Default: $default_env"
-
-    log "🔍 Current environment variables:"
-    printenv | sort | sed 's/^/    /' | tee -a "$LOG_FILE"
-    
-    # First try the hotspot-specific file
-    if [ -f "$hotspot_env" ]; then
-        log "🔄 Loading hotspot-specific environment from $hotspot_env"
-        # Debug: Show file contents
-        log "📄 File contents:"
-        cat "$hotspot_env" | sed 's/^/    /' | tee -a "$LOG_FILE"
-        source "$hotspot_env"
-        return 0
-    fi
-    
-    # Then try the default file
+    # Always load default config first
     if [ -f "$default_env" ]; then
-        log "⚠️ Using default environment from $default_env (hotspot-specific not found)"
+        log "🔧 Loading base configuration from $default_env"
         source "$default_env"
-        return 0
+    else
+        log "⚠️ No default configuration found at $default_env"
     fi
     
-    log "❌ No environment file found (tried $hotspot_env and $default_env)"
-    exit 1
+    # For API calls (not terminal mode), load hotspot-specific config
+    if [ "$config_id" != "default" ] && [ -f "$hotspot_env" ]; then
+        log "🔄 Loading hotspot-specific overrides from $hotspot_env"
+        source "$hotspot_env"
+        
+        # Auto-generate network params if not specified
+        export AP_IP="${AP_IP:-192.168.${config_id}.1}"
+        export DHCP_RANGE_START="${DHCP_RANGE_START:-192.168.${config_id}.10}"
+        export DHCP_RANGE_END="${DHCP_RANGE_END:-192.168.${config_id}.100}"
+    fi
+
+    # Debug output
+    log "⚙️ Active configuration:"
+    log " - SSID: ${SSID:-NOT SET}"
+    log " - INTERFACE: ${INTERFACE:-will auto-detect}"
+    log " - AP_IP: ${AP_IP:-NOT SET}"
+    log " - CHANNEL: ${CHANNEL:-6}"
+}
+
+# Interface detection (prioritizes env file, then auto-detects)
+detect_interface() {
+    # Use configured interface if specified
+    if [ -n "${INTERFACE:-}" ]; then
+        if iw dev "$INTERFACE" info >/dev/null 2>&1; then
+            echo "$INTERFACE"
+            return 0
+        fi
+        log "⚠️ Configured interface $INTERFACE not found, auto-detecting..."
+    fi
+
+    # 2. Automatic detection
+    local interfaces=()
+    # Modern Linux (phy80211)
+    if [ -d /sys/class/net ]; then
+        interfaces+=($(ls /sys/class/net | grep -E 'wlan[0-9]+|wlo[0-9]+|wlp[0-9]+s[0-9]+'))
+    fi
+    
+    # Fallback to iw
+    if [ ${#interfaces[@]} -eq 0 ]; then
+        interfaces+=($(iw dev | awk '/Interface/{print $2}'))
+    fi
+
+    # Verify each interface
+    for iface in "${interfaces[@]}"; do
+        if iw phy $(cat /sys/class/net/$iface/phy80211/name) info | grep -q "AP"; then
+            echo "$iface"
+            return 0
+        fi
+    done
+
+    return 1
 }
 
 # Clean up
@@ -128,6 +164,7 @@ recover_network() {
     sudo nmcli networking on
     sleep 5
     sudo systemctl restart NetworkManager
+    log "✅ Network recovery restored successfully"
 }
 trap recover_network EXIT
 
@@ -136,14 +173,24 @@ trap recover_network EXIT
 case "$ACTION" in
     start)
         if [ -z "$HOTSPOT_ID" ]; then
-            log "❌ Hotspot ID not provided"
-            exit 1
+            # Terminal testing mode
+            log "🔧 Starting in terminal test mode"
+            if [ ! -f "/etc/hostapd-prod.env" ]; then
+                log "❌ Default config /etc/hostapd-prod.env not found"
+                exit 1
+            fi
+            load_environment "default"  # Special case for terminal
+        else
+            # Django API mode
+            load_environment "$HOTSPOT_ID"
         fi
-        load_environment "$HOTSPOT_ID"
-        # Verifying we can read the environment variables
-        log "🔍 Verifying environment variables..."
-        log " - SSID: ${SSID:-NOT SET}"
-        log " - AP_IP: ${AP_IP:-NOT SET}"
+        
+        # Common startup logic
+        INTERFACE=$(detect_interface) || {
+            log "❌ No suitable wireless interface found"
+            exit 1
+        }
+        log "✅ Using interface: $INTERFACE"
         ;;
     stop)
         log "🛑 Stopping hotspot services..."
@@ -156,6 +203,11 @@ case "$ACTION" in
             exit 1
         fi
         load_environment "$HOTSPOT_ID"
+        INTERFACE=$(detect_interface) || {
+            log "❌ No suitable wireless interface found"
+            exit 1
+        }
+        log "✅ Using interface: $INTERFACE"
         # Verifying we can read the environment variables
         log "🔍 Verifying environment variables..."
         log " - SSID: ${SSID:-NOT SET}"

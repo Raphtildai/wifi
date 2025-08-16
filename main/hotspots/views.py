@@ -1,6 +1,7 @@
 # hotspots/views.py
 import os
 import logging
+import subprocess
 from hotspots.services import HotspotControlService
 from celery import shared_task
 from rest_framework import serializers 
@@ -27,6 +28,7 @@ from rest_framework.decorators import action
 from rest_framework.viewsets import ViewSet
 from django.contrib.auth import authenticate
 from hotspots.tasks import control_hotspot_async
+# print("Environment variables:", dict(os.environ))
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +223,7 @@ class HotspotViewSet(viewsets.ModelViewSet):
             
             # Generate config and start hotspot
             task = control_hotspot_async.delay(hotspot.id, 'start')
-            hotspot.current_task_id = task.id
+            hotspot.task_id = task.id
             print(f"Hotspot task id: {task.id}")
             hotspot.is_active = False  # Will be updated by async task
             hotspot.save()
@@ -253,105 +255,143 @@ class HotspotViewSet(viewsets.ModelViewSet):
         try:
             service = HotspotControlService()
             
-            # 1. First verify the service file exists or create it
-            service_file = f'/etc/systemd/system/hotspot_{hotspot.id}.service'
-            if not os.path.exists(service_file):
-                logger.info(f"Service file not found, generating new one for hotspot {hotspot.id}")
-                env_file = service.generate_env_file(hotspot)
-                logger.debug(f"Generated env file at {env_file}")
-                
-                generated_file = service.generate_systemd_service(hotspot)
-                logger.info(f"Generated systemd service file at {generated_file}")
-                
-                # Verify the file was actually created
-                if not os.path.exists(service_file):
-                    logger.error("Service file generation failed - file not created")
-                    raise Exception("Failed to create systemd service file")
-            
-            # 2. Execute the start command with detailed logging
-            logger.info(f"Attempting to start hotspot {hotspot.id}")
-            result = service.execute_hotspot_command('start', hotspot.id)
-            logger.debug(f"Start command result: {result}")
-            
-            # 3. Verify the service actually started
-            if result['success']:
-                logger.info("Start command reported success, verifying status")
-                is_running = service.is_hotspot_running(hotspot.id)
-                logger.debug(f"Service status check: {'running' if is_running else 'not running'}")
-                
-                if not is_running:
-                    # Check system logs for clues
-                    journal_output = subprocess.run(
-                        ['sudo', 'journalctl', '-u', f'hotspot_{hotspot.id}.service', '-n', '10', '--no-pager'],
-                        capture_output=True,
-                        text=True
-                    ).stdout
-                    logger.error(f"Service failed to start. Journal logs:\n{journal_output}")
-                    
-                    raise Exception(f"Service reported started but is not running. Logs: {journal_output}")
-                
-                # Update hotspot status
-                hotspot.is_active = True
-                hotspot.save()
-                
+            # First check current status
+            is_running = service.is_hotspot_running(hotspot.id)
+            if is_running:
                 return Response({
                     'success': True,
                     'status': 200,
-                    'message': f'Hotspot {hotspot.ssid} started successfully',
-                    'data': {
-                        'status': 'started',
-                        'output': result.get('stdout'),
-                        'verified': True  # Indicates we confirmed it's running
-                    },
-                    'errors': None
+                    'message': f'Hotspot {hotspot.ssid} is already running',
+                    'already_running': True,
+                    'service_status': service.get_service_status(hotspot.id)
                 })
-            else:
-                # Start command failed
-                error_details = {
-                    'command': result.get('command'),
-                    'returncode': result.get('returncode'),
-                    'stdout': result.get('stdout'),
-                    'stderr': result.get('stderr'),
-                    'hotspot_id': hotspot.id,
-                }
-                logger.error(f"Hotspot start command failed: {error_details}")
-                raise Exception(f"Hotspot start failed. Details: {error_details}")
+            
+            # Execute start command
+            result = service.execute_hotspot_command('start', hotspot.id)
+            
+            # Handle timeout case where service actually started
+            if result.get('timed_out') and service.is_hotspot_running(hotspot.id):
+                hotspot.is_active = True
+                hotspot.save()
+                return Response({
+                    'success': True,
+                    'status': 200,
+                    'message': f'Hotspot {hotspot.ssid} started (despite timeout)',
+                    'timed_out': True,
+                    'service_status': service.get_service_status(hotspot.id)
+                })
+            
+            if not result['success']:
+                # Get detailed status for debugging
+                detailed_status = service.get_service_status(hotspot.id)
                 
+                # Check for NetworkManager conflicts
+                nm_conflict = "NetworkManager" in result.get('stderr', '') or "NetworkManager" in detailed_status.get('systemd_status', '')
+                
+                raise Exception(
+                    f"Failed to start hotspot\n"
+                    f"Command output: {result.get('stdout', '')}\n"
+                    f"Command error: {result.get('stderr', '')}\n"
+                    f"NetworkManager conflict: {nm_conflict}\n"
+                    f"Service status:\n{detailed_status}"
+                )
+            
+            # Update hotspot status
+            hotspot.is_active = True
+            hotspot.save()
+            
+            return Response({
+                'success': True,
+                'status': 200,
+                'message': f'Hotspot {hotspot.ssid} started successfully',
+                'service_status': service.get_service_status(hotspot.id),
+                'troubleshooting': [
+                    f"Check processes: ps aux | grep -E 'hostapd|dnsmasq'",
+                    f"Verify interface: ip link show {hotspot.interface}",
+                    f"View logs: journalctl -u hotspot_{hotspot.id}.service -n 50 --no-pager"
+                ]
+            })
+            
         except Exception as e:
-            logger.error(f"Hotspot start failed: {str(e)}", exc_info=True)
+            logger.error(f"Hotspot start error: {str(e)}")
+            current_status = service.is_hotspot_running(hotspot.id) if 'service' in locals() else None
             return Response({
                 'success': False,
                 'error': str(e),
-                'details': f"Failed to start hotspot {hotspot.ssid}",
-                'hotspot_config': {
-                    'ssid': hotspot.ssid,
-                    'interface': hotspot.interface,
-                    'channel': hotspot.channel
-                },
+                'is_running': current_status,
+                'service_status': service.get_service_status(hotspot.id) if 'service' in locals() else 'N/A',
                 'troubleshooting': [
-                    "Check systemd logs: sudo journalctl -u hotspot_{hotspot.id}.service",
-                    "Verify network interface configuration",
-                    "Check hostapd and dnsmasq services"
+                    "Check NetworkManager: systemctl status NetworkManager",
+                    "Stop conflicting services: sudo systemctl stop NetworkManager",
+                    "View full logs: sudo journalctl -u hotspot_{hotspot.id}.service -b --no-pager"
                 ]
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+    
     @action(detail=True, methods=['post'])
     def stop(self, request, pk=None):
-        """Stop a specific hotspot"""
+        """Enhanced stop command with multiple fallback methods"""
         hotspot = self.get_object()
         try:
-            task = control_hotspot_async.delay(hotspot.id, 'stop')
-            hotspot.current_task_id = task.id
+            service = HotspotControlService()
+            
+            # First check current status
+            is_running = service.is_hotspot_running(hotspot.id)
+            if not is_running:
+                return Response({
+                    'success': True,
+                    'status': 200,
+                    'message': f'Hotspot {hotspot.ssid} is already stopped',
+                    'already_stopped': True,
+                    'service_status': service.get_service_status(hotspot.id)
+                })
+            
+            # Execute stop command
+            result = service.execute_hotspot_command('stop', hotspot.id)
+            
+            if not result['success']:
+                # Try force stopping if regular stop failed
+                service._force_stop_hotspot(hotspot.id)
+                still_running = service.is_hotspot_running(hotspot.id)
+                
+                if still_running:
+                    raise Exception(
+                        f"Failed to stop hotspot despite force stop attempts\n"
+                        f"Original command output: {result.get('stdout', '')}\n"
+                        f"Original command error: {result.get('stderr', '')}\n"
+                        f"Service status:\n{service.get_service_status(hotspot.id)}"
+                    )
+            
+            # Update hotspot status
             hotspot.is_active = False
             hotspot.save()
+            
             return Response({
-                'status': 'stopping',
-                'message': f'Hotspot {hotspot.ssid} is being stopped',
-                'task_id': task.id
+                'success': True,
+                'status': 200,
+                'message': f'Hotspot {hotspot.ssid} stopped successfully',
+                'verified_stopped': True,
+                'service_status': service.get_service_status(hotspot.id),
+                'force_stop_used': result.get('force_stop', False),
+                'troubleshooting': [
+                    f"Check processes: sudo ps aux | grep -E 'hostapd|dnsmasq'",
+                    f"Verify service: sudo systemctl status hotspot_{hotspot.id}.service",
+                    f"View full logs: sudo journalctl -u hotspot_{hotspot.id}.service -b --no-pager"
+                ]
             })
+            
         except Exception as e:
+            logger.error(f"Hotspot stop error: {str(e)}")
+            current_status = service.is_hotspot_running(hotspot.id) if 'service' in locals() else None
             return Response({
-                'error': str(e)
+                'success': False,
+                'error': str(e),
+                'still_running': current_status,
+                'service_status': service.get_service_status(hotspot.id) if 'service' in locals() else 'N/A',
+                'troubleshooting': [
+                    f"Try manual force stop: sudo systemctl stop hotspot_{hotspot.id}.service && sudo pkill -f 'hostapd|dnsmasq'",
+                    f"Reset interface: sudo ip link set {hotspot.interface} down",
+                    f"Check logs: sudo journalctl -u hotspot_{hotspot.id}.service -n 100 --no-pager"
+                ]
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])

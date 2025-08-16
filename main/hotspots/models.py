@@ -6,7 +6,6 @@ from django.utils.translation import gettext_lazy as _
 from accounts.enums import UserType
 import subprocess
 import os
-from django.utils.functional import cached_property
 
 User = get_user_model()
 
@@ -99,11 +98,6 @@ class Hotspot(models.Model):
     def __str__(self):
         return f"{self.ssid} at {self.location.name}"
 
-    def clean(self):
-        from .services import HotspotControlService
-        if not HotspotControlService._validate_interface_for_ap(self.interface):
-            raise ValidationError(f"Interface {self.interface} is not suitable for AP mode")
-    
     def start(self):
         """Start hotspot using service layer"""
         from hotspots.services import HotspotControlService
@@ -135,7 +129,7 @@ class Hotspot(models.Model):
         call_command('hotspot_control', 'restart', f'--hotspot-id={self.id}')
 
     def get_status(self):
-        """Check if hotspot is running with more robust verification"""
+        """Check if hotspot is running by verifying hostapd process and SSID"""
         try:
             # Check if hostapd is running (any instance)
             hostapd_running = subprocess.run(
@@ -152,23 +146,9 @@ class Hotspot(models.Model):
             if os.path.exists(config_path):
                 with open(config_path, 'r') as f:
                     config_content = f.read()
-                    if f'ssid={self.ssid}' not in config_content:
-                        return False
+                    return f'ssid={self.ssid}' in config_content
 
-            # Verify interface is in AP mode
-            interface = self._get_interface()
-            if not interface:
-                return False
-
-            iw_result = subprocess.run(
-                ['iw', interface, 'info'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            
-            return ('type AP' in iw_result.stdout or 
-                    'mode AP' in iw_result.stdout)
+            return False
 
         except subprocess.SubprocessError as e:
             self._log_error(f"Subprocess error in status check: {str(e)}")
@@ -177,46 +157,8 @@ class Hotspot(models.Model):
             self._log_error(f"Unexpected error in status check: {str(e)}")
             return False
 
-    @cached_property
-    def interface(self):
-        return self._get_interface()
-
-    def _get_interface(self):
-        """More reliable interface detection"""
-        try:
-            # First try to find the interface used by hostapd
-            proc_result = subprocess.run(
-                ['ps', '-aux'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            
-            for line in proc_result.stdout.split('\n'):
-                if 'hostapd' in line and '-i' in line:
-                    parts = line.split()
-                    interface_index = parts.index('-i') + 1
-                    if interface_index < len(parts):
-                        return parts[interface_index]
-
-            # Fallback to iw dev if above fails
-            iw_result = subprocess.run(
-                ['iw', 'dev'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            
-            for line in iw_result.stdout.split('\n'):
-                if 'Interface' in line:
-                    return line.split()[1]
-
-            return None
-        except Exception:
-            return None
-
-    # Method to get PID of the hostapd process
     def get_hostapd_pid(self):
+        """Get PID of the hostapd process for this hotspot"""
         try:
             result = subprocess.run(
                 ['pgrep', '-f', f'hostapd.*{self.ssid}'],
@@ -230,26 +172,32 @@ class Hotspot(models.Model):
         except Exception:
             return None
     
-    # Method to get connection count
     def get_connected_clients(self):
-        """Get number of connected clients"""
-        interface = self.interface
-        if not interface:
-            return 0
-            
+        """Get number of connected clients by parsing hostapd status"""
         try:
+            pid = self.get_hostapd_pid()
+            if not pid:
+                return 0
+                
+            # Use hostapd_cli to get connected stations
             result = subprocess.run(
-                ['iw', 'dev', interface, 'station', 'dump'],
+                ['hostapd_cli', '-p', '/var/run/hostapd', 'list_sta'],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
             )
             if result.returncode == 0:
                 return len([line for line in result.stdout.split('\n') 
-                        if 'Station' in line])
+                        if line.strip()])
             return 0
         except Exception:
             return 0
+
+    def _log_error(self, message):
+        """Helper method for consistent error logging"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Hotspot {self.id} ({self.ssid}): {message}")
             
 class Session(models.Model):
     user = models.ForeignKey(
